@@ -1,0 +1,70 @@
+name: Bug report
+description: Something in @medicomind/svelte-adapter-hono doesn't work as expected
+title: '[bug]: '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug! A minimal reproduction makes fixes dramatically faster.
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: What happened, and what did you expect to happen instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: >
+        Steps to reproduce, ideally with a link to a minimal repo (a small SvelteKit app
+        plus your `svelte.config.js`). Include the adapter options you pass to `adapter({ ... })`.
+      placeholder: |
+        1. `npm create svelte@latest` with ...
+        2. Configure the adapter with ...
+        3. `npm run build && node build`
+        4. Request `GET /...` → observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / output
+      description: Relevant build output, server logs or error stack traces.
+      render: shell
+  - type: input
+    id: adapter-version
+    attributes:
+      label: Adapter version
+      placeholder: e.g. 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      description: '`node --version` — note that `.zst` precompression requires Node ≥ 22.15.'
+      placeholder: e.g. 22.15.0
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: SvelteKit / hono / @hono/node-server versions, OS, package manager.
+      placeholder: |
+        @sveltejs/kit: 2.x
+        hono: 4.x
+        @hono/node-server: 2.x
+        OS: ...
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and this hasn't been reported yet.
+          required: true
+        - label: I can reproduce this with the latest version of the adapter.
+          required: true

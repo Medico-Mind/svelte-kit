@@ -1,5 +1,11 @@
 # @medicomind/svelte-adapter-hono
 
+[![CI](https://github.com/Medico-Mind/svelte-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/Medico-Mind/svelte-kit/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/%40medicomind%2Fsvelte-adapter-hono?logo=npm)](https://www.npmjs.com/package/@medicomind/svelte-adapter-hono)
+[![npm downloads](https://img.shields.io/npm/dm/%40medicomind%2Fsvelte-adapter-hono)](https://www.npmjs.com/package/@medicomind/svelte-adapter-hono)
+[![node](https://img.shields.io/node/v/%40medicomind%2Fsvelte-adapter-hono)](https://www.npmjs.com/package/@medicomind/svelte-adapter-hono)
+[![license](https://img.shields.io/npm/l/%40medicomind%2Fsvelte-adapter-hono)](./LICENSE)
+
 [SvelteKit](https://svelte.dev/docs/kit) adapter that builds a **standalone Node server powered by [Hono](https://hono.dev)** (`hono` + `@hono/node-server`) — a drop-in alternative to [`@sveltejs/adapter-node`](https://svelte.dev/docs/kit/adapter-node) with built-in **brotli, gzip and zstd precompression** served via `Accept-Encoding` negotiation.
 
 - Self-contained `build/` output: `node build` and you're serving.

@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest an idea or improvement for @medicomind/svelte-adapter-hono
+title: '[feature]: '
+labels: ['enhancement']
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do that the adapter currently makes hard or impossible?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What would you like to happen? A sketch of the API (adapter option, env var, …) helps.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you've tried, or why existing options (e.g. embedding the generated Hono app) don't fit.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and this hasn't been requested yet.
+          required: true
