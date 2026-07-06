@@ -2,9 +2,6 @@
 
 [![CI](https://github.com/Medico-Mind/svelte-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/Medico-Mind/svelte-kit/actions/workflows/ci.yml)
 [![Release](https://github.com/Medico-Mind/svelte-kit/actions/workflows/release.yml/badge.svg)](https://github.com/Medico-Mind/svelte-kit/actions/workflows/release.yml)
-[![npm version](https://img.shields.io/npm/v/%40medicomind%2Fsvelte-adapter-hono?logo=npm)](https://www.npmjs.com/package/@medicomind/svelte-adapter-hono)
-[![npm downloads](https://img.shields.io/npm/dm/%40medicomind%2Fsvelte-adapter-hono)](https://www.npmjs.com/package/@medicomind/svelte-adapter-hono)
-[![node](https://img.shields.io/node/v/%40medicomind%2Fsvelte-adapter-hono)](https://www.npmjs.com/package/@medicomind/svelte-adapter-hono)
 [![license](https://img.shields.io/npm/l/%40medicomind%2Fsvelte-adapter-hono)](./LICENSE)
 
 Monorepo for [`@medicomind/svelte-adapter-hono`](./packages/adapter-hono) — a SvelteKit adapter that emits a standalone Node server powered by [Hono](https://hono.dev), with brotli/gzip/zstd precompression.
