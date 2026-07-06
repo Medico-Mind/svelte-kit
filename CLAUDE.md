@@ -39,17 +39,17 @@ Three layers in `packages/adapter-hono/src`, deliberately separated for testabil
 - `src/runtime/*` — **pure runtime logic**, unit-tested in-process: `app.ts` (`buildHonoApp()`: static → prerendered → SSR middleware chain), `assets.ts` (boot-time file manifest — no fs calls on the hot path — plus streaming file serving, ETag/304, ranges), `negotiate.ts` (q-value parsing, `zstd > br > gzip` tie-break), `request.ts` (ORIGIN/proxy-header URL rewrite, streaming body-size limit), `address.ts`, `env-core.ts`, `lifecycle.ts` (graceful shutdown, `sveltekit:shutdown` event, idle timeout).
 - `src/files/*` — **templates** copied into the user's build output. They import via placeholder specifiers (`'SERVER'`, `'MANIFEST'`, `'ENV'`, `'HANDLER'`, `'SHIMS'`, bare `ENV_PREFIX`/`ENV_OVERRIDES`) that `adapt()` rewrites to relative paths (or JSON values); `src/files/ambient.d.ts` declares them for tsc. tsup inlines `src/runtime/*` into each template (`dist/files/*.js`), keeping placeholders and `hono`/`@hono/node-server`/`@sveltejs/kit` external.
 
-### The two-pass rollup in `adapt()` — do not merge the passes
+### The two-pass rolldown in `adapt()` — do not merge the passes
 
 1. **Pass 1**: SvelteKit server (`writeServer` output + generated manifest) → `build/server/` with chunks.
-2. **Pass 2**: each template is bundled as its **own single-entry rollup build** to the build root, resolving `hono`/`@hono/node-server` from the _user's_ node_modules (they are peer deps). Imports between emitted top-level modules (`./handler.js`, `./env.js`, `./shims.js`, `./server/*.js`) stay external with `makeAbsoluteExternalsRelative: false`.
+2. **Pass 2**: each template is bundled as its **own single-entry rolldown build** to the build root, resolving `hono`/`@hono/node-server` from the _user's_ node_modules (they are peer deps). Imports between emitted top-level modules (`./handler.js`, `./env.js`, `./shims.js`, `./server/*.js`) stay external with `makeAbsoluteExternalsRelative: false`.
 
-Rationale: `handler.js` locates `client/` and `prerendered/` via `import.meta.url`. A multi-entry pass lets rollup hoist the handler module into `chunks/`, silently breaking that lookup (this bug actually occurred). Single-entry builds cannot be code-split.
+Rationale: `handler.js` locates `client/` and `prerendered/` via `import.meta.url`. A multi-entry pass lets rolldown hoist the handler module into `chunks/`, silently breaking that lookup (this bug actually occurred). Single-entry builds must disable code splitting.
 
 ### Testing structure
 
 - `tests/unit/` — imports `src/` directly; fixtures in os tmpdir.
-- `tests/integration/adapter.test.ts` — runs real `adapt()` against a **fake Builder** with a stub `Server` class, then boots the emitted output with `node` and asserts over HTTP. Its temp dirs live in `packages/adapter-hono/.test-tmp/` (gitignored) — required so the adapt-time rollup can resolve `hono` from workspace node_modules; os tmpdir would break resolution.
+- `tests/integration/adapter.test.ts` — runs real `adapt()` against a **fake Builder** with a stub `Server` class, then boots the emitted output with `node` and asserts over HTTP. Its temp dirs live in `packages/adapter-hono/.test-tmp/` (gitignored) — required so the adapt-time rolldown can resolve `hono` from workspace node_modules; os tmpdir would break resolution.
 - `tests/e2e/example.test.ts` — vite-builds `examples/app`, boots `build/index.js`, asserts SSR/static/prerendered/negotiation/graceful shutdown, and imports `build/app.js` in-process for the embedding test.
 - Coverage excludes `src/files/**`: the templates are thin wiring exercised in child processes where v8 coverage can't see them; their behavior is covered by integration/e2e.
 - `tests/helpers/http.ts#rawRequest` uses `agent: false` on purpose — keep-alive reuse after early-413 responses poisons pooled sockets (was a flaky ECONNRESET).
@@ -58,4 +58,4 @@ Rationale: `handler.js` locates `client/` and `prerendered/` via `import.meta.ur
 
 - zstd compression needs Node ≥ 22.15 (`zlib.createZstdCompress`); on older Node the build warns and skips `.zst` — tests branch on `detectZstd()` (also the injection point for simulating unsupported Node). Serving `.zst` has no Node requirement.
 - `.d.ts` generation is plain `tsc -p tsconfig.build.json`, not tsup's dts — tsup's dts build breaks on TypeScript 5.9+/6.
-- `@rollup/plugin-commonjs`/`json` need the `interopDefault` shim in `src/index.ts` under NodeNext resolution.
+- `rolldown` handles node resolution, CommonJS, and JSON during the adapt-time bundle.

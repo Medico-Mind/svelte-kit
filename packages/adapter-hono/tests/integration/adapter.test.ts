@@ -11,7 +11,7 @@ import { detectZstd } from '../../src/compress.js';
 import { rawRequest, spawnServer, type SpawnedServer } from '../helpers/http.js';
 
 const pkgDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-// must live inside the package so the adapt-time rollup can resolve hono from node_modules
+// must live inside the package so the adapt-time rolldown can resolve hono from node_modules
 const scratch = path.join(pkgDir, '.test-tmp', `adapter-${process.pid}`);
 const out = path.join(scratch, 'build');
 

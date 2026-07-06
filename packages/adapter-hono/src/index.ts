@@ -10,21 +10,8 @@ import { builtinModules } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import commonjsPlugin from '@rollup/plugin-commonjs';
-import jsonPlugin from '@rollup/plugin-json';
-import { nodeResolve } from '@rollup/plugin-node-resolve';
 import type { Adapter, Builder } from '@sveltejs/kit';
-import { rollup } from 'rollup';
-
-/** CJS/ESM interop for rollup plugins whose types confuse NodeNext resolution. */
-function interopDefault<T>(module: T): T extends { default: infer F } ? F : T {
-	return ((module as { default?: unknown }).default ?? module) as T extends { default: infer F }
-		? F
-		: T;
-}
-
-const commonjs = interopDefault(commonjsPlugin);
-const json = interopDefault(jsonPlugin);
+import { rolldown, type InputOptions } from 'rolldown';
 
 import {
 	compressDirectory,
@@ -337,31 +324,26 @@ export default function adapter(options: AdapterOptions = {}): Adapter {
 				);
 			}
 
-			const plugins = () => [
-				nodeResolve({ preferBuiltins: true, exportConditions: ['node', 'import', 'default'] }),
-				commonjs(),
-				json()
-			];
-			const onwarn: NonNullable<Parameters<typeof rollup>[0]['onwarn']> = (warning, warn) => {
-				if (warning.code === 'CIRCULAR_DEPENDENCY' || warning.code === 'THIS_IS_UNDEFINED') {
+			const onLog: NonNullable<InputOptions['onLog']> = (level, log, defaultHandler) => {
+				if (log.code === 'CIRCULAR_DEPENDENCY' || log.code === 'THIS_IS_UNDEFINED') {
 					return;
 				}
-				warn(warning);
+				defaultHandler(level, log);
 			};
 			const isBuiltin = (id: string) => id.startsWith('node:') || builtinModules.includes(id);
 
 			// Pass 1: the SvelteKit server (with the app's server-side dependencies
 			// and dynamic route imports) is bundled into out/server.
 			builder.log.minor('Bundling SvelteKit server');
-			const serverBundle = await rollup({
+			const serverBundle = await rolldown({
 				input: {
 					index: `${tmp}/server/index.js`,
 					manifest: `${tmp}/manifest.js`
 				},
 				external: isBuiltin,
-				plugins: plugins(),
+				platform: 'node',
 				preserveEntrySignatures: 'exports-only',
-				onwarn
+				onLog
 			});
 			await serverBundle.write({
 				dir: `${out}/server`,
@@ -373,15 +355,15 @@ export default function adapter(options: AdapterOptions = {}): Adapter {
 			await serverBundle.close();
 
 			// Pass 2: each runtime template becomes exactly one file at the output
-			// root — a single-entry rollup build cannot be code-split, so relative
-			// imports between the emitted modules stay verbatim and handler.js'
+			// root — a single-entry rolldown build without code splitting keeps
+			// relative imports between the emitted modules verbatim and handler.js'
 			// import.meta.url-based lookup of client/ and prerendered/ stays correct.
 			builder.log.minor('Bundling server entry');
 			const tmpDir = path.resolve(tmp);
 			const crossModuleImport =
 				/^\.\/(handler|app|env|shims)\.js$|^\.\/server\/(index|manifest)\.js$/;
 			for (const name of TEMPLATE_FILES) {
-				const templateBundle = await rollup({
+				const templateBundle = await rolldown({
 					input: path.join(tmp, name),
 					external: (id, importer) => {
 						if (isBuiltin(id)) return true;
@@ -393,15 +375,15 @@ export default function adapter(options: AdapterOptions = {}): Adapter {
 					},
 					// keep './handler.js' & co. verbatim in the output
 					makeAbsoluteExternalsRelative: false,
-					plugins: plugins(),
+					platform: 'node',
 					preserveEntrySignatures: 'exports-only',
-					onwarn
+					onLog
 				});
 				await templateBundle.write({
 					file: path.join(out, name),
 					format: 'esm',
 					sourcemap: true,
-					inlineDynamicImports: true
+					codeSplitting: false
 				});
 				await templateBundle.close();
 			}

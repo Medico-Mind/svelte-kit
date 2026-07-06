@@ -4,7 +4,7 @@ import { defineConfig } from 'tsup';
  * Two build passes:
  *
  * 1. The adapter itself (`dist/index.js`) — the build-time API consumed from
- *    `svelte.config.js`. Its dependencies (rollup + plugins) stay external.
+ *    `svelte.config.js`. Its bundler dependency stays external.
  *
  * 2. The runtime templates (`dist/files/*.js`) — copied into the user's build
  *    output by `adapt()`. Each template is bundled flat (shared `src/runtime`
@@ -12,7 +12,7 @@ import { defineConfig } from 'tsup';
  *    - placeholder specifiers (`SERVER`, `MANIFEST`, `ENV`, `HANDLER`, `SHIMS`)
  *      which `adapt()` rewrites to relative paths in the emitted build, and
  *    - `hono` / `@hono/node-server` / `@sveltejs/kit`, which are resolved from
- *      the user's node_modules and bundled by the adapt-time rollup pass.
+ *      the user's node_modules and bundled by the adapt-time rolldown pass.
  */
 export default defineConfig([
 	{
