@@ -1,5 +1,11 @@
 # @medicomind/svelte-adapter-hono
 
+## 0.3.0
+
+### Minor Changes
+
+- f4bb56f: 1. Swap rollup to rolldown. 2. Up minimum node version to 22.
+
 ## 0.2.0
 
 ### Minor Changes
