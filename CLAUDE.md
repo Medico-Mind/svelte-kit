@@ -35,9 +35,9 @@ Releases: changesets (`npm run changeset` to record a change). `release.yml` pub
 
 Three layers in `packages/adapter-hono/src`, deliberately separated for testability:
 
-- `src/index.ts` + `src/compress.ts` — **build-time**. The adapter factory (`adapt()`) and the precompression walker (bounded worker pool; gzip 9 / brotli 11 / zstd 19).
+- `src/index.ts` + `src/compress.ts` — **build-time**. The adapter factory (`adapt()`), the typed `runtimeConfig` option (camelCase fields validated at config time, mapped to env-var names and baked into the emitted `env.js` via the `ENV_OVERRIDES` placeholder — baked values win over env vars at runtime), and the precompression walker (bounded worker pool; gzip 9 / brotli 11 / zstd 19).
 - `src/runtime/*` — **pure runtime logic**, unit-tested in-process: `app.ts` (`buildHonoApp()`: static → prerendered → SSR middleware chain), `assets.ts` (boot-time file manifest — no fs calls on the hot path — plus streaming file serving, ETag/304, ranges), `negotiate.ts` (q-value parsing, `zstd > br > gzip` tie-break), `request.ts` (ORIGIN/proxy-header URL rewrite, streaming body-size limit), `address.ts`, `env-core.ts`, `lifecycle.ts` (graceful shutdown, `sveltekit:shutdown` event, idle timeout).
-- `src/files/*` — **templates** copied into the user's build output. They import via placeholder specifiers (`'SERVER'`, `'MANIFEST'`, `'ENV'`, `'HANDLER'`, `'SHIMS'`, bare `ENV_PREFIX`) that `adapt()` rewrites to relative paths; `src/files/ambient.d.ts` declares them for tsc. tsup inlines `src/runtime/*` into each template (`dist/files/*.js`), keeping placeholders and `hono`/`@hono/node-server`/`@sveltejs/kit` external.
+- `src/files/*` — **templates** copied into the user's build output. They import via placeholder specifiers (`'SERVER'`, `'MANIFEST'`, `'ENV'`, `'HANDLER'`, `'SHIMS'`, bare `ENV_PREFIX`/`ENV_OVERRIDES`) that `adapt()` rewrites to relative paths (or JSON values); `src/files/ambient.d.ts` declares them for tsc. tsup inlines `src/runtime/*` into each template (`dist/files/*.js`), keeping placeholders and `hono`/`@hono/node-server`/`@sveltejs/kit` external.
 
 ### The two-pass rollup in `adapt()` — do not merge the passes
 

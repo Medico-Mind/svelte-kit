@@ -33,6 +33,27 @@ describe('createEnv', () => {
 			delete process.env.ADAPTER_HONO_TEST_VAR;
 		}
 	});
+
+	it('prefers overrides over source variables and the fallback', () => {
+		const env = createEnv('', { PORT: '9999' }, { PORT: '4000' });
+		expect(env('PORT')).toBe('4000');
+		expect(env('PORT', '3000')).toBe('4000');
+	});
+
+	it('matches overrides by unprefixed name', () => {
+		const env = createEnv('MY_APP_', { MY_APP_HOST: 'env-host' }, { HOST: 'config-host' });
+		expect(env('HOST')).toBe('config-host');
+	});
+
+	it('falls back to the source for variables without an override', () => {
+		const env = createEnv('', { PORT: '9999' }, { HOST: '127.0.0.1' });
+		expect(env('PORT')).toBe('9999');
+	});
+
+	it('prefers a present-but-empty override over source and fallback', () => {
+		const env = createEnv('', { HOST: 'env-host' }, { HOST: '' });
+		expect(env('HOST', '0.0.0.0')).toBe('');
+	});
 });
 
 describe('parseBodySizeLimit', () => {

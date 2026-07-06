@@ -31,8 +31,91 @@ import {
 	resolvePrecompressOptions,
 	type PrecompressOptions
 } from './compress.js';
+import { parseBodySizeLimit, type RuntimeEnvVar } from './runtime/env-core.js';
 
 export { DEFAULT_COMPRESS_EXTENSIONS, type PrecompressOptions } from './compress.js';
+
+/**
+ * Runtime configuration fixed at build time.
+ *
+ * Every field maps to a runtime environment variable. By default the emitted
+ * server reads its configuration from the environment; a field set here is
+ * baked into the build and **takes precedence over the corresponding
+ * environment variable** at runtime. Unset fields keep being read from the
+ * environment (honoring `envPrefix`).
+ */
+export interface RuntimeConfig {
+	/**
+	 * Port to listen on; `0` picks a random ephemeral port.
+	 * Overrides the `PORT` environment variable (default `3000`).
+	 */
+	port?: number;
+	/**
+	 * Interface to bind.
+	 * Overrides the `HOST` environment variable (default `'0.0.0.0'`).
+	 */
+	host?: string;
+	/**
+	 * Unix domain socket path to listen on; wins over `port`/`host` when set.
+	 * Overrides the `SOCKET_PATH` environment variable.
+	 */
+	socketPath?: string;
+	/**
+	 * Public origin of the app, e.g. `'https://example.com'`. Wins over the
+	 * proxy header fields below.
+	 * Overrides the `ORIGIN` environment variable.
+	 */
+	origin?: string;
+	/**
+	 * Header carrying the original protocol behind a proxy, e.g.
+	 * `'x-forwarded-proto'`.
+	 * Overrides the `PROTOCOL_HEADER` environment variable.
+	 */
+	protocolHeader?: string;
+	/**
+	 * Header carrying the original host behind a proxy, e.g.
+	 * `'x-forwarded-host'`.
+	 * Overrides the `HOST_HEADER` environment variable.
+	 */
+	hostHeader?: string;
+	/**
+	 * Header carrying the original port behind a proxy, e.g.
+	 * `'x-forwarded-port'`.
+	 * Overrides the `PORT_HEADER` environment variable.
+	 */
+	portHeader?: string;
+	/**
+	 * Header to read the client IP from, e.g. `'x-forwarded-for'`. Only
+	 * configure headers your proxy overwrites.
+	 * Overrides the `ADDRESS_HEADER` environment variable.
+	 */
+	addressHeader?: string;
+	/**
+	 * With `addressHeader: 'x-forwarded-for'`: how many proxies deep to look,
+	 * counting from the right of the header. Positive integer.
+	 * Overrides the `XFF_DEPTH` environment variable (default `1`).
+	 */
+	xffDepth?: number;
+	/**
+	 * Max request body size — a number of bytes, a string with an optional
+	 * `K`/`M`/`G` suffix (`'512K'`, `'1M'`), or `Infinity`. Both `0` and
+	 * `Infinity` disable the limit. Exceeding requests get a 413.
+	 * Overrides the `BODY_SIZE_LIMIT` environment variable (default `'512K'`).
+	 */
+	bodySizeLimit?: number | string;
+	/**
+	 * Seconds to wait for in-flight requests after `SIGINT`/`SIGTERM` before
+	 * force-closing sockets.
+	 * Overrides the `SHUTDOWN_TIMEOUT` environment variable (default `30`).
+	 */
+	shutdownTimeout?: number;
+	/**
+	 * If > 0: gracefully shut down after this many seconds without in-flight
+	 * requests; `0` disables.
+	 * Overrides the `IDLE_TIMEOUT` environment variable (default `0`).
+	 */
+	idleTimeout?: number;
+}
 
 /** Options for the `@medicomind/svelte-adapter-hono` adapter factory. */
 export interface AdapterOptions {
@@ -46,6 +129,12 @@ export interface AdapterOptions {
 	precompress?: boolean | PrecompressOptions;
 	/** Prefix for the runtime environment variables (`PORT`, `HOST`, …). Default `''`. */
 	envPrefix?: string;
+	/**
+	 * Runtime configuration fixed at build time. Every field defaults to its
+	 * runtime environment variable; a field set here is baked into the build
+	 * and takes precedence over that variable at runtime.
+	 */
+	runtimeConfig?: RuntimeConfig;
 }
 
 const TEMPLATE_FILES = ['index.js', 'handler.js', 'app.js', 'env.js', 'shims.js'] as const;
@@ -61,11 +150,12 @@ function templateDirectory(): string {
 	);
 }
 
-/** Rewrites quoted placeholder import specifiers and the ENV_PREFIX token. */
+/** Rewrites quoted placeholder import specifiers and the ENV_PREFIX/ENV_OVERRIDES tokens. */
 function instantiateTemplate(
 	content: string,
 	specifiers: Record<string, string>,
-	envPrefix: string
+	envPrefix: string,
+	envOverrides: Record<string, string>
 ): string {
 	let out = content.replaceAll('ENV_PREFIX', JSON.stringify(envPrefix));
 	for (const [token, value] of Object.entries(specifiers)) {
@@ -73,7 +163,89 @@ function instantiateTemplate(
 			.replaceAll(`"${token}"`, JSON.stringify(value))
 			.replaceAll(`'${token}'`, JSON.stringify(value));
 	}
-	return out;
+	// last, so user-provided values can never collide with the tokens above
+	return out.replaceAll('ENV_OVERRIDES', JSON.stringify(envOverrides));
+}
+
+const isString = (value: unknown): boolean => typeof value === 'string';
+const isSeconds = (value: unknown): boolean =>
+	typeof value === 'number' && Number.isFinite(value) && value >= 0;
+const isBodySizeLimit = (value: unknown): boolean => {
+	if (typeof value === 'number') return value >= 0; // includes Infinity, excludes NaN
+	if (typeof value !== 'string') return false;
+	try {
+		parseBodySizeLimit(value);
+		return true;
+	} catch {
+		return false;
+	}
+};
+
+/** Per-field environment variable mapping and validation for `runtimeConfig`. */
+const RUNTIME_CONFIG_FIELDS: Record<
+	keyof RuntimeConfig,
+	{ envVar: RuntimeEnvVar; expected: string; ok: (value: unknown) => boolean }
+> = {
+	port: {
+		envVar: 'PORT',
+		expected: 'an integer between 0 and 65535',
+		ok: (value) =>
+			typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 65535
+	},
+	host: { envVar: 'HOST', expected: 'a string', ok: isString },
+	socketPath: { envVar: 'SOCKET_PATH', expected: 'a string', ok: isString },
+	origin: { envVar: 'ORIGIN', expected: 'a string', ok: isString },
+	protocolHeader: { envVar: 'PROTOCOL_HEADER', expected: 'a string', ok: isString },
+	hostHeader: { envVar: 'HOST_HEADER', expected: 'a string', ok: isString },
+	portHeader: { envVar: 'PORT_HEADER', expected: 'a string', ok: isString },
+	addressHeader: { envVar: 'ADDRESS_HEADER', expected: 'a string', ok: isString },
+	xffDepth: {
+		envVar: 'XFF_DEPTH',
+		expected: 'a positive integer',
+		ok: (value) => typeof value === 'number' && Number.isInteger(value) && value >= 1
+	},
+	bodySizeLimit: {
+		envVar: 'BODY_SIZE_LIMIT',
+		expected:
+			"a non-negative number of bytes, a string with an optional K/M/G suffix, or 'Infinity'",
+		ok: isBodySizeLimit
+	},
+	shutdownTimeout: {
+		envVar: 'SHUTDOWN_TIMEOUT',
+		expected: 'a non-negative number of seconds',
+		ok: isSeconds
+	},
+	idleTimeout: {
+		envVar: 'IDLE_TIMEOUT',
+		expected: 'a non-negative number of seconds',
+		ok: isSeconds
+	}
+};
+
+/**
+ * Validates `runtimeConfig` and maps it onto the environment variable names
+ * baked into the emitted `env.js`.
+ */
+function resolveRuntimeConfig(config: RuntimeConfig): Record<string, string> {
+	const overrides: Record<string, string> = {};
+	for (const [key, value] of Object.entries(config)) {
+		const field = RUNTIME_CONFIG_FIELDS[key as keyof RuntimeConfig] as
+			(typeof RUNTIME_CONFIG_FIELDS)[keyof RuntimeConfig] | undefined;
+		if (!field) {
+			throw new Error(
+				`@medicomind/svelte-adapter-hono: unknown 'runtimeConfig' option '${key}'. Known options: ${Object.keys(RUNTIME_CONFIG_FIELDS).join(', ')}`
+			);
+		}
+		if (value === undefined) continue;
+		if (!field.ok(value)) {
+			const shown = typeof value === 'string' ? `'${value}'` : String(value);
+			throw new Error(
+				`@medicomind/svelte-adapter-hono: invalid 'runtimeConfig.${key}' value ${shown} — expected ${field.expected}`
+			);
+		}
+		overrides[field.envVar] = String(value);
+	}
+	return overrides;
 }
 
 /** Copies non-JS server assets (used by `read()` from `$app/server`) into the output. */
@@ -101,13 +273,19 @@ function copyServerAssets(from: string, to: string): void {
  *
  * export default {
  *   kit: {
- *     adapter: adapter({ out: 'build', precompress: true, envPrefix: '' })
+ *     adapter: adapter({
+ *       out: 'build',
+ *       precompress: true,
+ *       envPrefix: '',
+ *       runtimeConfig: { bodySizeLimit: '1M' }
+ *     })
  *   }
  * };
  * ```
  */
 export default function adapter(options: AdapterOptions = {}): Adapter {
-	const { out = 'build', precompress = true, envPrefix = '' } = options;
+	const { out = 'build', precompress = true, envPrefix = '', runtimeConfig = {} } = options;
+	const envOverrides = resolveRuntimeConfig(runtimeConfig);
 
 	return {
 		name: '@medicomind/svelte-adapter-hono',
@@ -153,7 +331,10 @@ export default function adapter(options: AdapterOptions = {}): Adapter {
 			};
 			for (const name of TEMPLATE_FILES) {
 				const content = readFileSync(path.join(templates, name), 'utf8');
-				writeFileSync(path.join(tmp, name), instantiateTemplate(content, specifiers, envPrefix));
+				writeFileSync(
+					path.join(tmp, name),
+					instantiateTemplate(content, specifiers, envPrefix, envOverrides)
+				);
 			}
 
 			const plugins = () => [

@@ -33,3 +33,9 @@ declare module 'SHIMS' {
 
 /** Replaced with the JSON-encoded `envPrefix` adapter option at adapt time. */
 declare const ENV_PREFIX: string;
+
+/**
+ * Replaced at adapt time with the JSON-encoded `runtimeConfig` adapter option,
+ * mapped onto environment variable names with stringified values.
+ */
+declare const ENV_OVERRIDES: Record<string, string>;

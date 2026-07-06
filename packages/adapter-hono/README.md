@@ -27,7 +27,8 @@ export default {
 		adapter: adapter({
 			out: 'build',
 			precompress: true,
-			envPrefix: ''
+			envPrefix: '',
+			runtimeConfig: { bodySizeLimit: '1M' }
 		})
 	}
 };
@@ -42,11 +43,12 @@ node build
 
 ## Options
 
-| Option        | Type                            | Default   | Description                                                                                       |
-| ------------- | ------------------------------- | --------- | ------------------------------------------------------------------------------------------------- |
-| `out`         | `string`                        | `'build'` | Output directory for the standalone build.                                                        |
-| `precompress` | `boolean \| PrecompressOptions` | `true`    | Generate `.gz`/`.br`/`.zst` sidecars for static assets and prerendered pages (see below).         |
-| `envPrefix`   | `string`                        | `''`      | Prefix for all runtime environment variables (e.g. `'MY_APP_'` → `MY_APP_PORT`, `MY_APP_HOST` …). |
+| Option          | Type                            | Default   | Description                                                                                       |
+| --------------- | ------------------------------- | --------- | ------------------------------------------------------------------------------------------------- |
+| `out`           | `string`                        | `'build'` | Output directory for the standalone build.                                                        |
+| `precompress`   | `boolean \| PrecompressOptions` | `true`    | Generate `.gz`/`.br`/`.zst` sidecars for static assets and prerendered pages (see below).         |
+| `envPrefix`     | `string`                        | `''`      | Prefix for all runtime environment variables (e.g. `'MY_APP_'` → `MY_APP_PORT`, `MY_APP_HOST` …). |
+| `runtimeConfig` | `RuntimeConfig`                 | `{}`      | Typed runtime configuration fixed at build time; wins over environment variables (see below).     |
 
 ### `precompress`
 
@@ -67,28 +69,63 @@ adapter({
 - Compression runs in a bounded worker pool (`os.cpus().length` jobs).
 - **zstd generation requires Node ≥ 22.15 / ≥ 23.8** (zstd support in `node:zlib`). On older Node versions the build **warns and skips** `.zst` — it never fails. Serving `.zst` sidecars has **no** Node version requirement (the precompressed file is streamed as-is).
 
+### `runtimeConfig`
+
+Fixes runtime configuration at build time, with full type checking. Every field maps to one of the [runtime environment variables](#runtime-environment-variables); the server reads its configuration from the environment by default, and any field set here is baked into the build and **takes precedence over the corresponding environment variable** at runtime:
+
+```js
+adapter({
+	runtimeConfig: {
+		port: 8080, // overrides PORT
+		bodySizeLimit: '10M', // overrides BODY_SIZE_LIMIT
+		addressHeader: 'x-forwarded-for' // overrides ADDRESS_HEADER
+	}
+});
+```
+
+The `RuntimeConfig` type (exported from the package) documents every field:
+
+```ts
+interface RuntimeConfig {
+	port?: number; // PORT              — integer 0–65535; 0 → random ephemeral port
+	host?: string; // HOST              — interface to bind
+	socketPath?: string; // SOCKET_PATH       — unix socket; wins over port/host
+	origin?: string; // ORIGIN            — public origin, e.g. 'https://example.com'
+	protocolHeader?: string; // PROTOCOL_HEADER   — e.g. 'x-forwarded-proto'
+	hostHeader?: string; // HOST_HEADER       — e.g. 'x-forwarded-host'
+	portHeader?: string; // PORT_HEADER       — e.g. 'x-forwarded-port'
+	addressHeader?: string; // ADDRESS_HEADER    — e.g. 'x-forwarded-for'
+	xffDepth?: number; // XFF_DEPTH         — positive integer
+	bodySizeLimit?: number | string; // BODY_SIZE_LIMIT   — bytes, 'K'/'M'/'G' suffix or Infinity
+	shutdownTimeout?: number; // SHUTDOWN_TIMEOUT  — seconds ≥ 0
+	idleTimeout?: number; // IDLE_TIMEOUT      — seconds ≥ 0
+}
+```
+
+Values are validated when `svelte.config.js` is loaded — an unknown field or a value of the wrong shape (e.g. `port: 1.5`, `bodySizeLimit: '10KB'`) fails the build immediately. `envPrefix` does not apply to `runtimeConfig` (it only prefixes environment variables).
+
 ### Serving negotiation
 
 For static assets and prerendered pages the server parses `Accept-Encoding` with q-values and picks the best available sidecar. When q-values tie, preference is **`zstd` > `br` > `gzip` > identity**. Responses carry the correct `content-encoding`, the original `content-type` and `vary: accept-encoding`. Range requests are never served from compressed sidecars. When no sidecar matches, the identity file is streamed.
 
 ## Runtime environment variables
 
-All names respect `envPrefix`.
+All names respect `envPrefix`. Each variable can also be fixed at build time via the typed [`runtimeConfig` adapter option](#runtimeconfig) (right column), in which case the baked-in value wins over the environment.
 
-| Variable           | Default   | Description                                                                                                      |
-| ------------------ | --------- | ---------------------------------------------------------------------------------------------------------------- |
-| `PORT`             | `3000`    | Port to listen on (`0` → random ephemeral port).                                                                 |
-| `HOST`             | `0.0.0.0` | Interface to bind.                                                                                               |
-| `SOCKET_PATH`      | —         | Unix domain socket path; overrides `PORT`/`HOST` when set.                                                       |
-| `ORIGIN`           | —         | Public origin of the app (`https://example.com`). Wins over the header options below.                            |
-| `PROTOCOL_HEADER`  | —         | Header carrying the original protocol behind a proxy (e.g. `x-forwarded-proto`).                                 |
-| `HOST_HEADER`      | —         | Header carrying the original host (e.g. `x-forwarded-host`).                                                     |
-| `PORT_HEADER`      | —         | Header carrying the original port (e.g. `x-forwarded-port`).                                                     |
-| `ADDRESS_HEADER`   | —         | Header to read the client IP from (e.g. `x-forwarded-for`).                                                      |
-| `XFF_DEPTH`        | `1`       | With `ADDRESS_HEADER=x-forwarded-for`: how many proxies deep to look, counting from the right.                   |
-| `BODY_SIZE_LIMIT`  | `512K`    | Max request body size in bytes; supports `K`/`M`/`G` suffixes and `Infinity` (`0` also disables). 413 on exceed. |
-| `SHUTDOWN_TIMEOUT` | `30`      | Seconds to wait for in-flight requests after `SIGINT`/`SIGTERM` before force-closing sockets.                    |
-| `IDLE_TIMEOUT`     | `0`       | If > 0: gracefully shut down after this many seconds without in-flight requests. `0` disables.                   |
+| Variable           | Default   | Description                                                                                                      | `runtimeConfig` field |
+| ------------------ | --------- | ---------------------------------------------------------------------------------------------------------------- | --------------------- |
+| `PORT`             | `3000`    | Port to listen on (`0` → random ephemeral port).                                                                 | `port`                |
+| `HOST`             | `0.0.0.0` | Interface to bind.                                                                                               | `host`                |
+| `SOCKET_PATH`      | —         | Unix domain socket path; overrides `PORT`/`HOST` when set.                                                       | `socketPath`          |
+| `ORIGIN`           | —         | Public origin of the app (`https://example.com`). Wins over the header options below.                            | `origin`              |
+| `PROTOCOL_HEADER`  | —         | Header carrying the original protocol behind a proxy (e.g. `x-forwarded-proto`).                                 | `protocolHeader`      |
+| `HOST_HEADER`      | —         | Header carrying the original host (e.g. `x-forwarded-host`).                                                     | `hostHeader`          |
+| `PORT_HEADER`      | —         | Header carrying the original port (e.g. `x-forwarded-port`).                                                     | `portHeader`          |
+| `ADDRESS_HEADER`   | —         | Header to read the client IP from (e.g. `x-forwarded-for`).                                                      | `addressHeader`       |
+| `XFF_DEPTH`        | `1`       | With `ADDRESS_HEADER=x-forwarded-for`: how many proxies deep to look, counting from the right.                   | `xffDepth`            |
+| `BODY_SIZE_LIMIT`  | `512K`    | Max request body size in bytes; supports `K`/`M`/`G` suffixes and `Infinity` (`0` also disables). 413 on exceed. | `bodySizeLimit`       |
+| `SHUTDOWN_TIMEOUT` | `30`      | Seconds to wait for in-flight requests after `SIGINT`/`SIGTERM` before force-closing sockets.                    | `shutdownTimeout`     |
+| `IDLE_TIMEOUT`     | `0`       | If > 0: gracefully shut down after this many seconds without in-flight requests. `0` disables.                   | `idleTimeout`         |
 
 ### Graceful shutdown
 

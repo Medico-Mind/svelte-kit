@@ -2,6 +2,25 @@
  * Environment variable helpers shared by the build templates and unit tests.
  */
 
+/** The runtime environment variables recognized by the emitted server. */
+export const RUNTIME_ENV_VARS = [
+	'PORT',
+	'HOST',
+	'SOCKET_PATH',
+	'ORIGIN',
+	'PROTOCOL_HEADER',
+	'HOST_HEADER',
+	'PORT_HEADER',
+	'ADDRESS_HEADER',
+	'XFF_DEPTH',
+	'BODY_SIZE_LIMIT',
+	'SHUTDOWN_TIMEOUT',
+	'IDLE_TIMEOUT'
+] as const;
+
+/** A runtime environment variable name (always unprefixed). */
+export type RuntimeEnvVar = (typeof RUNTIME_ENV_VARS)[number];
+
 /** Reads an (optionally prefixed) environment variable. */
 export interface EnvReader {
 	(name: string): string | undefined;
@@ -12,11 +31,19 @@ export interface EnvReader {
  * Creates an environment reader that resolves `name` as `${prefix}${name}`
  * against `source` (defaults to `process.env`).
  *
+ * `overrides` (keyed by unprefixed name) win over `source` — used for values
+ * baked in at build time via the adapter's `runtimeConfig` option.
+ *
  * A variable that is present but empty wins over the fallback, matching
  * `adapter-node` semantics.
  */
-export function createEnv(prefix: string, source: NodeJS.ProcessEnv = process.env): EnvReader {
+export function createEnv(
+	prefix: string,
+	source: NodeJS.ProcessEnv = process.env,
+	overrides: Record<string, string> = {}
+): EnvReader {
 	const reader = (name: string, fallback?: string): string | undefined => {
+		if (name in overrides) return overrides[name];
 		const key = `${prefix}${name}`;
 		return key in source ? source[key] : fallback;
 	};

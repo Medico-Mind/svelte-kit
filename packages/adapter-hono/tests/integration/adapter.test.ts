@@ -6,7 +6,7 @@ import zlib from 'node:zlib';
 import type { Builder } from '@sveltejs/kit';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import adapter from '../../src/index.js';
+import adapter, { type RuntimeConfig } from '../../src/index.js';
 import { detectZstd } from '../../src/compress.js';
 import { rawRequest, spawnServer, type SpawnedServer } from '../helpers/http.js';
 
@@ -215,16 +215,24 @@ describe('adapter.adapt()', () => {
 		}, 30_000);
 	});
 
-	describe('envPrefix', () => {
+	describe('envPrefix and runtimeConfig', () => {
 		const prefixedOut = path.join(scratch, 'build-prefixed');
 		let server: SpawnedServer;
 
 		beforeAll(async () => {
-			await adapter({ out: prefixedOut, precompress: false, envPrefix: 'MY_APP_' }).adapt(
-				fakeBuilder()
+			await adapter({
+				out: prefixedOut,
+				precompress: false,
+				envPrefix: 'MY_APP_',
+				runtimeConfig: { bodySizeLimit: 64 }
+			}).adapt(fakeBuilder());
+			// PORT must be ignored in favor of MY_APP_PORT; MY_APP_BODY_SIZE_LIMIT
+			// must be ignored in favor of runtimeConfig.bodySizeLimit
+			server = await spawnServer(
+				path.join(prefixedOut, 'index.js'),
+				{ PORT: '1', MY_APP_BODY_SIZE_LIMIT: '1024' },
+				'MY_APP_PORT'
 			);
-			// PORT must be ignored in favor of MY_APP_PORT
-			server = await spawnServer(path.join(prefixedOut, 'index.js'), { PORT: '1' }, 'MY_APP_PORT');
 		}, 120_000);
 
 		afterAll(async () => {
@@ -237,8 +245,68 @@ describe('adapter.adapt()', () => {
 			expect(response.body.toString()).toBe('ssr:/hello');
 		});
 
+		it('lets runtimeConfig override runtime environment variables', async () => {
+			const allowed = await rawRequest(`${server.baseUrl}/upload`, {
+				method: 'POST',
+				body: 'x'.repeat(32)
+			});
+			expect(allowed.body.toString()).toBe('len:32');
+
+			// 128 bytes fits MY_APP_BODY_SIZE_LIMIT=1024 but not the baked-in 64
+			const rejected = await rawRequest(`${server.baseUrl}/upload`, {
+				method: 'POST',
+				body: 'x'.repeat(128)
+			});
+			expect(rejected.status).toBe(413);
+		});
+
 		it('skips precompression when disabled', () => {
 			expect(existsSync(path.join(prefixedOut, 'client/large.txt.gz'))).toBe(false);
+		});
+	});
+
+	describe('runtimeConfig validation', () => {
+		it('rejects unknown options at config time', () => {
+			expect(() => adapter({ runtimeConfig: { nope: 'x' } as unknown as RuntimeConfig })).toThrow(
+				/unknown 'runtimeConfig' option 'nope'/
+			);
+		});
+
+		it('rejects values of the wrong shape at config time', () => {
+			expect(() => adapter({ runtimeConfig: { port: 1.5 } })).toThrow(
+				/invalid 'runtimeConfig\.port' value 1\.5 — expected an integer/
+			);
+			expect(() => adapter({ runtimeConfig: { port: 70_000 } })).toThrow(
+				/invalid 'runtimeConfig\.port'/
+			);
+			expect(() => adapter({ runtimeConfig: { xffDepth: 0 } })).toThrow(
+				/invalid 'runtimeConfig\.xffDepth' value 0 — expected a positive integer/
+			);
+			expect(() => adapter({ runtimeConfig: { bodySizeLimit: '10KB' } })).toThrow(
+				/invalid 'runtimeConfig\.bodySizeLimit' value '10KB'/
+			);
+			expect(() => adapter({ runtimeConfig: { shutdownTimeout: -1 } })).toThrow(
+				/invalid 'runtimeConfig\.shutdownTimeout'/
+			);
+			expect(() => adapter({ runtimeConfig: { host: 123 as unknown as string } })).toThrow(
+				/invalid 'runtimeConfig\.host' value 123 — expected a string/
+			);
+		});
+
+		it('accepts documented value shapes', () => {
+			expect(() =>
+				adapter({
+					runtimeConfig: {
+						port: 0,
+						host: '127.0.0.1',
+						bodySizeLimit: '1M',
+						idleTimeout: 60,
+						xffDepth: 2
+					}
+				})
+			).not.toThrow();
+			expect(() => adapter({ runtimeConfig: { bodySizeLimit: Infinity } })).not.toThrow();
+			expect(() => adapter({ runtimeConfig: { bodySizeLimit: 0 } })).not.toThrow();
 		});
 	});
 });
