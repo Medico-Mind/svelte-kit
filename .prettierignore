@@ -1,0 +1,10 @@
+node_modules/
+dist/
+build/
+coverage/
+.svelte-kit/
+.test-tmp/
+package-lock.json
+CHANGELOG.md
+*.svelte
+.claude/
