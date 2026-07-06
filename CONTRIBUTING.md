@@ -11,7 +11,7 @@ This is an npm-workspaces monorepo:
 
 ## Prerequisites
 
-- Node.js ≥ 20.19 (Node ≥ 22.15 if you want `.zst` sidecar generation to run locally — on older Node the build skips zstd with a warning, and the tests assert that behavior)
+- Node.js ≥ 22.15
 - npm ≥ 10
 
 ## Getting started
@@ -67,7 +67,7 @@ npx vitest run tests/unit/app.test.ts -t 'redirects'
    ```sh
    npm run lint && npm run check && npm test
    ```
-5. Open a pull request. CI runs lint, typecheck and the full test suite on Node 20, 22 and 24.
+5. Open a pull request. CI runs lint, typecheck and the full test suite on Node 22 and 24.
 
 ## Releases
 

@@ -19,7 +19,7 @@ export default defineConfig([
 		entry: { index: 'src/index.ts' },
 		format: ['esm'],
 		platform: 'node',
-		target: 'node20',
+		target: 'node22',
 		// .d.ts files are emitted by `tsc -p tsconfig.build.json` (see the build script)
 		dts: false,
 		sourcemap: true,
@@ -35,7 +35,7 @@ export default defineConfig([
 		},
 		format: ['esm'],
 		platform: 'node',
-		target: 'node20',
+		target: 'node22',
 		splitting: false,
 		dts: false,
 		sourcemap: false,

@@ -90,7 +90,7 @@ export type ZstdFactory = (() => NodeJS.ReadWriteStream) | null;
 
 /**
  * Detects zstd support in the running Node (`zlib.createZstdCompress`,
- * Node ≥ 22.15 / ≥ 23.8) and returns a level-19 compressor factory, or `null`.
+ * Node ≥ 22.15) and returns a level-19 compressor factory, or `null`.
  */
 export function detectZstd(): ZstdFactory {
 	const candidate = (
@@ -188,7 +188,7 @@ export async function compressDirectory(
 		} else {
 			result.zstdSkipped = true;
 			warn(
-				'zstd is not supported by this Node version (requires >= 22.15 / >= 23.8 with node:zlib zstd support) — skipping .zst generation'
+				'zstd is not supported by this Node version (requires >= 22.15 with node:zlib zstd support) — skipping .zst generation'
 			);
 		}
 	}

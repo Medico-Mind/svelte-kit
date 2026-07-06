@@ -74,7 +74,7 @@ adapter({
 
 - Only files **≥ 1024 bytes** whose extension is in the `files` allowlist are compressed.
 - Compression runs in a bounded worker pool (`os.cpus().length` jobs).
-- **zstd generation requires Node ≥ 22.15 / ≥ 23.8** (zstd support in `node:zlib`). On older Node versions the build **warns and skips** `.zst` — it never fails. Serving `.zst` sidecars has **no** Node version requirement (the precompressed file is streamed as-is).
+- **zstd generation requires Node ≥ 22.15** (zstd support in `node:zlib`), which is also this package's minimum Node version. Serving `.zst` sidecars has **no** Node version requirement (the precompressed file is streamed as-is).
 
 ### `runtimeConfig`
 
@@ -194,7 +194,7 @@ systemd socket activation (`LISTEN_FDS`), HTTP/2, TLS termination, clustering, a
 
 **Only ADDRESS_HEADER you trust** — any client can send `x-forwarded-for`; only configure headers your proxy overwrites.
 
-**No `.zst` files in the build** — your build machine's Node lacks zstd in `node:zlib` (needs ≥ 22.15 / ≥ 23.8). The build logs a warning and emits `.gz`/`.br` only; serving still works everywhere.
+**No `.zst` files in the build** — your build machine's Node lacks zstd in `node:zlib` (needs ≥ 22.15). The build logs a warning and emits `.gz`/`.br` only; serving still works everywhere.
 
 **413 Payload Too Large on legitimate uploads** — raise `BODY_SIZE_LIMIT` (e.g. `BODY_SIZE_LIMIT=10M`), or set it to `Infinity` and enforce limits in your own handlers.
 

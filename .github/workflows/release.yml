@@ -32,7 +32,7 @@ jobs:
       # which conflicts with OIDC-based trusted publishing
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '26'
           cache: npm
 
       # trusted publishing requires npm >= 11.5.1

@@ -29,7 +29,7 @@ npx vitest run tests/unit/app.test.ts -t 'redirects'
 
 **Integration and e2e tests use `dist/`, not `src/`** — rebuild (`npm run build`) after changing `src/` before running them; `npm test` does this automatically. The e2e suite also runs `npm run build` inside `examples/app` (vite build) in its `beforeAll`.
 
-Releases: changesets (`npm run changeset` to record a change). `release.yml` publishes from `main` via npm Trusted Publishing (OIDC, no `NPM_TOKEN`; needs npm ≥ 11.5.1). CI matrix: Node 20/22/24.
+Releases: changesets (`npm run changeset` to record a change). `release.yml` publishes from `main` via npm Trusted Publishing (OIDC, no `NPM_TOKEN`; needs npm ≥ 11.5.1). CI matrix: Node 22/24.
 
 ## Architecture
 
@@ -56,6 +56,6 @@ Rationale: `handler.js` locates `client/` and `prerendered/` via `import.meta.ur
 
 ### Version-sensitive facts
 
-- zstd compression needs Node ≥ 22.15 (`zlib.createZstdCompress`); on older Node the build warns and skips `.zst` — tests branch on `detectZstd()` (also the injection point for simulating unsupported Node). Serving `.zst` has no Node requirement.
+- The package requires Node ≥ 22.15, which includes `zlib.createZstdCompress` for zstd generation. Tests still branch on `detectZstd()` as the injection point for simulating unsupported zstd.
 - `.d.ts` generation is plain `tsc -p tsconfig.build.json`, not tsup's dts — tsup's dts build breaks on TypeScript 5.9+/6.
 - `rolldown` handles node resolution, CommonJS, and JSON during the adapt-time bundle.
