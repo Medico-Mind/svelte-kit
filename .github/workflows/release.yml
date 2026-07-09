@@ -37,7 +37,7 @@ jobs:
 
       # trusted publishing requires npm >= 11.5.1
       - name: Update npm
-        run: npm install -g npm@latest && npm --version
+        run: npm install -g npm@11 && npm --version
 
       - name: Install
         run: npm ci
