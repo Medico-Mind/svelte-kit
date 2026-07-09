@@ -11,7 +11,7 @@
 
 - Self-contained `build/` output: `node build` and you're serving.
 - Static assets → prerendered pages → SSR, in that order, with zero sync fs calls and no per-request buffering on the hot path (file existence is resolved from a manifest built once at boot).
-- `.gz` / `.br` / `.zst` sidecars generated at build time and negotiated per request with full q-value parsing.
+- `.gz` / `.br` / `.zst` sidecars generated at build time and negotiated per request with full q-value parsing. Compression runs on native Rust ([`@medicomind/rolldown-compression`](https://github.com/Medico-Mind/rolldown-compression)) — about **2× faster than `node:zlib`** on our benchmarks.
 - Composable: embed the generated Hono app inside your own server.
 
 ## Installation
@@ -73,7 +73,7 @@ adapter({
 ```
 
 - Only files **≥ 1024 bytes** whose extension is in the `files` allowlist are compressed.
-- Compression runs natively (Rust) via [`@medicomind/rolldown-compression`](https://github.com/Medico-Mind/rolldown-compression), parallelized across all logical CPUs.
+- Compression is powered by [`@medicomind/rolldown-compression`](https://github.com/Medico-Mind/rolldown-compression), a native (Rust, napi-rs) rolldown plugin that compresses files in parallel across all logical CPUs. We use it instead of `node:zlib` because it compressed build output about **2× faster** on our benchmarks — at the maximum compression levels above, precompression dominates build time for asset-heavy apps.
 
 ### `runtimeConfig`
 
@@ -173,6 +173,7 @@ const response = await handler(new Request('http://localhost/'));
 | ---------------------------------------------- | ----------------------- | -------------------------------------------- |
 | HTTP layer                                     | polka + sirv            | hono + @hono/node-server                     |
 | Precompression                                 | gzip, brotli            | gzip, brotli, **zstd**                       |
+| Precompression engine                          | `node:zlib`             | **native Rust** (~2× faster, parallel)       |
 | Precompressed serving with q-value negotiation | ✅                      | ✅ (+ `zstd > br > gzip` tie-breaking)       |
 | `ORIGIN` / proxy header handling               | ✅                      | ✅ (same env vars)                           |
 | `BODY_SIZE_LIMIT`                              | ✅                      | ✅ (same syntax, streaming enforcement)      |
