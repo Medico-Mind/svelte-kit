@@ -1,6 +1,6 @@
 {
 	"name": "@medicomind/svelte-adapter-hono",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "SvelteKit adapter that builds a standalone Node server powered by Hono, with brotli/gzip/zstd precompression",
 	"keywords": [
 		"sveltekit",
