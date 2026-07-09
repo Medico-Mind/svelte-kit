@@ -1,9 +1,13 @@
-import { createReadStream, createWriteStream, existsSync } from 'node:fs';
-import { readdir, stat } from 'node:fs/promises';
-import { cpus } from 'node:os';
+import { existsSync } from 'node:fs';
+import { readFile, readdir, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { pipeline } from 'node:stream/promises';
-import zlib from 'node:zlib';
+
+import {
+	compression,
+	defineAlgorithm,
+	type DefineAlgorithmResult
+} from '@medicomind/rolldown-compression';
+import { rolldown, type InputOptions, type Plugin } from 'rolldown';
 
 /**
  * Default extension allowlist for precompression (compressible text/code
@@ -26,19 +30,6 @@ export const DEFAULT_COMPRESS_EXTENSIONS = [
 /** Files smaller than this are not worth compressing. */
 export const DEFAULT_MIN_COMPRESS_SIZE = 1024;
 
-/** Extensions treated as text for brotli's `BROTLI_MODE_TEXT` heuristic. */
-const TEXT_EXTENSIONS = new Set([
-	'html',
-	'js',
-	'json',
-	'css',
-	'svg',
-	'xml',
-	'txt',
-	'map',
-	'webmanifest'
-]);
-
 const SIDECAR_SUFFIXES = ['.gz', '.br', '.zst'];
 
 /**
@@ -50,7 +41,7 @@ export interface PrecompressOptions {
 	brotli?: boolean;
 	/** Generate `.gz` sidecars. Default `true`. */
 	gzip?: boolean;
-	/** Generate `.zst` sidecars (requires zstd support in `node:zlib`). Default `true`. */
+	/** Generate `.zst` sidecars. Default `true`. */
 	zstd?: boolean;
 	/** File extension allowlist (without dots). Defaults to {@link DEFAULT_COMPRESS_EXTENSIONS}. */
 	files?: string[];
@@ -83,63 +74,47 @@ export function resolvePrecompressOptions(
 	};
 }
 
-type Compressor = () => NodeJS.ReadWriteStream;
-
-/** Factory producing a zstd compressor stream, or `null` when unsupported. */
-export type ZstdFactory = (() => NodeJS.ReadWriteStream) | null;
-
-/**
- * Detects zstd support in the running Node (`zlib.createZstdCompress`,
- * Node ≥ 22.15) and returns a level-19 compressor factory, or `null`.
- */
-export function detectZstd(): ZstdFactory {
-	const candidate = (
-		zlib as unknown as { createZstdCompress?: (options?: object) => NodeJS.ReadWriteStream }
-	).createZstdCompress;
-	if (typeof candidate !== 'function') return null;
-	const levelKey = (zlib.constants as unknown as Record<string, number>).ZSTD_c_compressionLevel;
-	const params = levelKey === undefined ? {} : { [levelKey]: 19 };
-	return () => candidate({ params });
-}
-
 export interface CompressDirectoryExtras {
 	/** Minimum file size in bytes to compress. Default {@link DEFAULT_MIN_COMPRESS_SIZE}. */
 	minSize?: number;
-	/** Concurrent compression jobs. Default `os.cpus().length`. */
+	/** Native compression threads; `0` uses all logical CPUs. Default `0`. */
 	concurrency?: number;
-	/** Warning sink (zstd unavailable, etc.). Default `console.warn`. */
-	warn?: (message: string) => void;
-	/**
-	 * zstd stream factory override, mainly for tests: pass `null` to simulate
-	 * an unsupported Node, or a custom factory. Defaults to {@link detectZstd}.
-	 */
-	createZstd?: ZstdFactory;
 }
 
 export interface CompressDirectoryResult {
 	/** Sidecar files written, as absolute paths. */
 	written: string[];
-	/** `true` when zstd was requested but unsupported by this Node. */
-	zstdSkipped: boolean;
 }
 
-async function collectFiles(root: string): Promise<{ filePath: string; size: number }[]> {
-	const out: { filePath: string; size: number }[] = [];
+async function collectFiles(
+	root: string,
+	extensions: Set<string>,
+	minSize: number
+): Promise<string[]> {
+	const out: string[] = [];
 	const entries = await readdir(root, { withFileTypes: true, recursive: true });
 	for (const entry of entries) {
 		if (!entry.isFile()) continue;
 		const filePath = path.join(entry.parentPath, entry.name);
+		if (SIDECAR_SUFFIXES.some((suffix) => filePath.endsWith(suffix))) continue;
+		if (!extensions.has(path.extname(filePath).slice(1).toLowerCase())) continue;
 		const stats = await stat(filePath);
-		out.push({ filePath, size: stats.size });
+		if (stats.size < minSize) continue;
+		out.push(filePath);
 	}
 	return out;
 }
 
+const VIRTUAL_ENTRY = 'virtual:adapter-hono-precompress';
+// no extension on purpose: it can never match the compression include filter
+const ENTRY_FILE_NAME = 'adapter-hono-precompress-entry';
+
 /**
  * Walks `directory` and writes `.gz` / `.br` / `.zst` sidecars for every file
- * that matches the extension allowlist and the minimum size, using a bounded
- * worker pool. Missing zstd support is reported via `warn` and skipped rather
- * than failing the build.
+ * that matches the extension allowlist and the minimum size, using the native
+ * `@medicomind/rolldown-compression` rolldown plugin (gzip 9 / brotli 11 /
+ * zstd 19). The eligible files are fed to the plugin as emitted assets of a
+ * virtual-entry rolldown build that writes back into `directory`.
  */
 export async function compressDirectory(
 	directory: string,
@@ -147,85 +122,80 @@ export async function compressDirectory(
 	extras: CompressDirectoryExtras = {}
 ): Promise<CompressDirectoryResult> {
 	const minSize = extras.minSize ?? DEFAULT_MIN_COMPRESS_SIZE;
-	const concurrency = Math.max(1, extras.concurrency ?? cpus().length);
-	const warn = extras.warn ?? ((message) => console.warn(message));
 
-	const result: CompressDirectoryResult = { written: [], zstdSkipped: false };
+	const result: CompressDirectoryResult = { written: [] };
 	if (!existsSync(directory)) return result;
 
-	const encoders: {
-		ext: string;
-		create: (file: { size: number; text: boolean }) => NodeJS.ReadWriteStream;
-	}[] = [];
+	const algorithms: DefineAlgorithmResult[] = [];
+	if (options.gzip) algorithms.push(defineAlgorithm('gzip', { level: 9 }));
+	if (options.brotli) algorithms.push(defineAlgorithm('brotli', { quality: 11 }));
+	if (options.zstd) algorithms.push(defineAlgorithm('zstd', { level: 19 }));
+	if (algorithms.length === 0 || options.extensions.size === 0) return result;
 
-	if (options.gzip) {
-		encoders.push({
-			ext: '.gz',
-			create: () => zlib.createGzip({ level: zlib.constants.Z_BEST_COMPRESSION })
-		});
-	}
+	const files = await collectFiles(directory, options.extensions, minSize);
+	if (files.length === 0) return result;
 
-	if (options.brotli) {
-		encoders.push({
-			ext: '.br',
-			create: ({ size, text }) =>
-				zlib.createBrotliCompress({
-					params: {
-						[zlib.constants.BROTLI_PARAM_QUALITY]: 11,
-						[zlib.constants.BROTLI_PARAM_SIZE_HINT]: size,
-						[zlib.constants.BROTLI_PARAM_MODE]: text
-							? zlib.constants.BROTLI_MODE_TEXT
-							: zlib.constants.BROTLI_MODE_GENERIC
-					}
-				})
-		});
-	}
-
-	if (options.zstd) {
-		const createZstd = extras.createZstd === undefined ? detectZstd() : extras.createZstd;
-		if (createZstd) {
-			encoders.push({ ext: '.zst', create: () => createZstd() });
-		} else {
-			result.zstdSkipped = true;
-			warn(
-				'zstd is not supported by this Node version (requires >= 22.15 with node:zlib zstd support) — skipping .zst generation'
-			);
+	const emitAssets: Plugin = {
+		name: 'adapter-hono:emit-directory-assets',
+		resolveId: (id) => (id === VIRTUAL_ENTRY ? id : null),
+		load: (id) => (id === VIRTUAL_ENTRY ? 'export {};' : null),
+		async buildStart() {
+			for (const filePath of files) {
+				this.emitFile({
+					type: 'asset',
+					fileName: path.relative(directory, filePath).split(path.sep).join('/'),
+					source: await readFile(filePath)
+				});
+			}
 		}
-	}
+	};
 
-	if (encoders.length === 0) return result;
+	// registered after the compression plugin, so its generateBundle hook runs
+	// once the sidecar assets have been emitted
+	const collectSidecars: Plugin = {
+		name: 'adapter-hono:collect-sidecars',
+		generateBundle(_options, bundle) {
+			for (const fileName of Object.keys(bundle)) {
+				if (SIDECAR_SUFFIXES.some((suffix) => fileName.endsWith(suffix))) {
+					result.written.push(path.join(directory, fileName));
+				}
+			}
+		}
+	};
 
-	const files = (await collectFiles(directory)).filter(({ filePath, size }) => {
-		if (size < minSize) return false;
-		if (SIDECAR_SUFFIXES.some((suffix) => filePath.endsWith(suffix))) return false;
-		const ext = path.extname(filePath).slice(1).toLowerCase();
-		return options.extensions.has(ext);
+	const onLog: NonNullable<InputOptions['onLog']> = (level, log, defaultHandler) => {
+		if (log.code === 'EMPTY_BUNDLE') return;
+		defaultHandler(level, log);
+	};
+
+	const bundle = await rolldown({
+		input: VIRTUAL_ENTRY,
+		plugins: [
+			emitAssets,
+			compression({
+				include: new RegExp(`\\.(${[...options.extensions].join('|')})$`, 'i'),
+				threshold: minSize,
+				algorithms,
+				// parity with the previous node:zlib implementation, which always
+				// wrote a sidecar for every eligible file
+				skipIfLargerOrEqual: false,
+				concurrency: extras.concurrency ?? 0,
+				logLevel: 'silent'
+			}),
+			collectSidecars
+		],
+		onLog
 	});
-
-	const jobs: { filePath: string; size: number; ext: string; create: Compressor }[] = [];
-	for (const { filePath, size } of files) {
-		const text = TEXT_EXTENSIONS.has(path.extname(filePath).slice(1).toLowerCase());
-		for (const encoder of encoders) {
-			jobs.push({
-				filePath,
-				size,
-				ext: encoder.ext,
-				create: () => encoder.create({ size, text })
-			});
-		}
+	try {
+		await bundle.write({
+			dir: directory,
+			entryFileNames: ENTRY_FILE_NAME,
+			sourcemap: false
+		});
+	} finally {
+		await bundle.close();
 	}
-
-	let index = 0;
-	async function worker(): Promise<void> {
-		while (index < jobs.length) {
-			const job = jobs[index++]!;
-			const destination = job.filePath + job.ext;
-			await pipeline(createReadStream(job.filePath), job.create(), createWriteStream(destination));
-			result.written.push(destination);
-		}
-	}
-
-	await Promise.all(Array.from({ length: Math.min(concurrency, jobs.length) }, worker));
+	await rm(path.join(directory, ENTRY_FILE_NAME), { force: true });
 
 	return result;
 }

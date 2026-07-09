@@ -64,17 +64,16 @@ node build
 ```js
 adapter({
 	precompress: {
-		gzip: true, // .gz  via zlib gzip, level 9              (default true)
-		brotli: true, // .br  via brotli, quality 11, size hint  (default true)
-		zstd: true, // .zst via zstd, level 19                 (default true)
+		gzip: true, // .gz  via gzip, level 9      (default true)
+		brotli: true, // .br  via brotli, quality 11 (default true)
+		zstd: true, // .zst via zstd, level 19     (default true)
 		files: ['html', 'js', 'json', 'css', 'svg', 'xml', 'wasm', 'txt', 'map', 'ico', 'webmanifest']
 	}
 });
 ```
 
 - Only files **≥ 1024 bytes** whose extension is in the `files` allowlist are compressed.
-- Compression runs in a bounded worker pool (`os.cpus().length` jobs).
-- **zstd generation requires Node ≥ 22.15** (zstd support in `node:zlib`), which is also this package's minimum Node version. Serving `.zst` sidecars has **no** Node version requirement (the precompressed file is streamed as-is).
+- Compression runs natively (Rust) via [`@medicomind/rolldown-compression`](https://github.com/Medico-Mind/rolldown-compression), parallelized across all logical CPUs.
 
 ### `runtimeConfig`
 
@@ -193,8 +192,6 @@ systemd socket activation (`LISTEN_FDS`), HTTP/2, TLS termination, clustering, a
 **`event.getClientAddress()` returns the proxy IP** — set `ADDRESS_HEADER=x-forwarded-for` and make sure `XFF_DEPTH` matches the number of trusted proxies in front of the server (it counts from the right of the header).
 
 **Only ADDRESS_HEADER you trust** — any client can send `x-forwarded-for`; only configure headers your proxy overwrites.
-
-**No `.zst` files in the build** — your build machine's Node lacks zstd in `node:zlib` (needs ≥ 22.15). The build logs a warning and emits `.gz`/`.br` only; serving still works everywhere.
 
 **413 Payload Too Large on legitimate uploads** — raise `BODY_SIZE_LIMIT` (e.g. `BODY_SIZE_LIMIT=10M`), or set it to `Infinity` and enforce limits in your own handlers.
 

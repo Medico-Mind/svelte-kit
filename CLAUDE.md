@@ -56,6 +56,6 @@ Rationale: `handler.js` locates `client/` and `prerendered/` via `import.meta.ur
 
 ### Version-sensitive facts
 
-- The package requires Node ≥ 22.15, which includes `zlib.createZstdCompress` for zstd generation. Tests still branch on `detectZstd()` as the injection point for simulating unsupported zstd.
+- Precompression is done by the native (Rust) `@medicomind/rolldown-compression` rolldown plugin, so gzip/brotli/zstd are always available regardless of the Node version. The package still requires Node ≥ 22.15: tests use `zlib.zstdDecompressSync` to verify `.zst` sidecars.
 - `.d.ts` generation is plain `tsc -p tsconfig.build.json`, not tsup's dts — tsup's dts build breaks on TypeScript 5.9+/6.
 - `rolldown` handles node resolution, CommonJS, and JSON during the adapt-time bundle.

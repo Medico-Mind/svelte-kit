@@ -1,20 +1,20 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { PassThrough } from 'node:stream';
 import zlib from 'node:zlib';
 
-import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it } from 'vitest';
 
 import {
 	DEFAULT_COMPRESS_EXTENSIONS,
 	compressDirectory,
-	detectZstd,
 	resolvePrecompressOptions
 } from '../../src/compress.js';
 
 const BIG = 'compressible text, repeated over and over. '.repeat(100); // ~4.3 KB
-const zstdSupported = detectZstd() !== null;
+
+const zstdDecompressSync = (zlib as unknown as { zstdDecompressSync: (b: Buffer) => Buffer })
+	.zstdDecompressSync;
 
 let dir: string;
 
@@ -57,7 +57,7 @@ describe('resolvePrecompressOptions', () => {
 
 describe('compressDirectory', () => {
 	it('produces sidecars that decompress to identical bytes', async () => {
-		const result = await compressDirectory(dir, ALL, { warn: () => {} });
+		const result = await compressDirectory(dir, ALL);
 
 		for (const file of ['page.html', 'nested/app.js']) {
 			const original = readFileSync(path.join(dir, file));
@@ -65,91 +65,73 @@ describe('compressDirectory', () => {
 			expect(zlib.brotliDecompressSync(readFileSync(path.join(dir, `${file}.br`)))).toEqual(
 				original
 			);
-			if (zstdSupported) {
-				const zstdDecompress = (zlib as unknown as { zstdDecompressSync: (b: Buffer) => Buffer })
-					.zstdDecompressSync;
-				expect(zstdDecompress(readFileSync(path.join(dir, `${file}.zst`)))).toEqual(original);
-			}
+			expect(zstdDecompressSync(readFileSync(path.join(dir, `${file}.zst`)))).toEqual(original);
 		}
 
-		const expectedPerFile = zstdSupported ? 3 : 2;
-		expect(result.written).toHaveLength(2 * expectedPerFile);
-		expect(result.zstdSkipped).toBe(!zstdSupported);
+		expect(result.written).toHaveLength(2 * 3);
 	});
 
 	it('sidecars are smaller than the source for compressible input', async () => {
-		await compressDirectory(dir, ALL, { warn: () => {} });
+		await compressDirectory(dir, ALL);
 		const original = readFileSync(path.join(dir, 'page.html')).byteLength;
 		expect(readFileSync(path.join(dir, 'page.html.gz')).byteLength).toBeLessThan(original);
 		expect(readFileSync(path.join(dir, 'page.html.br')).byteLength).toBeLessThan(original);
 	});
 
+	it('leaves the original files untouched', async () => {
+		await compressDirectory(dir, ALL);
+		expect(readFileSync(path.join(dir, 'page.html'), 'utf8')).toBe(BIG);
+		expect(existsSync(path.join(dir, 'adapter-hono-precompress-entry'))).toBe(false);
+	});
+
 	it('skips files below the size threshold', async () => {
-		await compressDirectory(dir, ALL, { warn: () => {} });
+		await compressDirectory(dir, ALL);
 		expect(existsSync(path.join(dir, 'tiny.css.gz'))).toBe(false);
 	});
 
 	it('skips files outside the extension allowlist', async () => {
-		await compressDirectory(dir, ALL, { warn: () => {} });
+		await compressDirectory(dir, ALL);
 		expect(existsSync(path.join(dir, 'image.png.gz'))).toBe(false);
 	});
 
 	it('honors a custom size threshold', async () => {
-		await compressDirectory(dir, ALL, { warn: () => {}, minSize: 1 });
+		await compressDirectory(dir, ALL, { minSize: 1 });
 		expect(existsSync(path.join(dir, 'tiny.css.gz'))).toBe(true);
 	});
 
 	it('respects per-encoding toggles', async () => {
 		const gzipOnly = resolvePrecompressOptions({ brotli: false, zstd: false })!;
-		await compressDirectory(dir, gzipOnly, { warn: () => {} });
+		await compressDirectory(dir, gzipOnly);
 		expect(existsSync(path.join(dir, 'page.html.gz'))).toBe(true);
 		expect(existsSync(path.join(dir, 'page.html.br'))).toBe(false);
 		expect(existsSync(path.join(dir, 'page.html.zst'))).toBe(false);
 	});
 
 	it('does not re-compress existing sidecars', async () => {
-		await compressDirectory(dir, ALL, { warn: () => {} });
-		await compressDirectory(dir, ALL, { warn: () => {} });
+		await compressDirectory(dir, ALL);
+		await compressDirectory(dir, ALL);
 		expect(existsSync(path.join(dir, 'page.html.gz.gz'))).toBe(false);
 		expect(existsSync(path.join(dir, 'page.html.br.gz'))).toBe(false);
 	});
 
-	it('warns and skips zstd when unsupported instead of failing', async () => {
-		const warn = vi.fn();
-		const result = await compressDirectory(dir, ALL, { warn, createZstd: null });
-
-		expect(result.zstdSkipped).toBe(true);
-		expect(warn).toHaveBeenCalledOnce();
-		expect(warn.mock.calls[0]![0]).toMatch(/zstd/);
-		expect(existsSync(path.join(dir, 'page.html.zst'))).toBe(false);
-		expect(existsSync(path.join(dir, 'page.html.gz'))).toBe(true);
-	});
-
-	it('uses an injected zstd factory', async () => {
-		const result = await compressDirectory(dir, ALL, {
-			warn: () => {},
-			createZstd: () => new PassThrough()
-		});
-		expect(result.zstdSkipped).toBe(false);
-		expect(readFileSync(path.join(dir, 'page.html.zst')).toString()).toBe(BIG);
-	});
-
 	it('returns an empty result for a missing directory', async () => {
-		const result = await compressDirectory(path.join(dir, 'does-not-exist'), ALL, {
-			warn: () => {}
-		});
+		const result = await compressDirectory(path.join(dir, 'does-not-exist'), ALL);
 		expect(result.written).toEqual([]);
 	});
 
 	it('does nothing when every encoding is toggled off', async () => {
 		const none = resolvePrecompressOptions({ gzip: false, brotli: false, zstd: false })!;
-		const result = await compressDirectory(dir, none, { warn: () => {} });
+		const result = await compressDirectory(dir, none);
 		expect(result.written).toEqual([]);
-		expect(result.zstdSkipped).toBe(false);
+	});
+
+	it('does nothing for an empty extension allowlist', async () => {
+		const result = await compressDirectory(dir, resolvePrecompressOptions({ files: [] })!);
+		expect(result.written).toEqual([]);
 	});
 
 	it('bounds concurrency without dropping work', async () => {
-		const result = await compressDirectory(dir, ALL, { warn: () => {}, concurrency: 1 });
+		const result = await compressDirectory(dir, ALL, { concurrency: 1 });
 		expect(result.written.length).toBeGreaterThan(0);
 	});
 });

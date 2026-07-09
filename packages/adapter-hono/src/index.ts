@@ -292,9 +292,7 @@ export default function adapter(options: AdapterOptions = {}): Adapter {
 			if (resolvedPrecompress) {
 				builder.log.minor('Compressing assets');
 				for (const dir of [`${out}/client`, `${out}/prerendered`]) {
-					await compressDirectory(dir, resolvedPrecompress, {
-						warn: (message) => builder.log.warn(message)
-					});
+					await compressDirectory(dir, resolvedPrecompress);
 				}
 			}
 

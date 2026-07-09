@@ -8,14 +8,11 @@ import zlib from 'node:zlib';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { detectZstd } from '../../src/compress.js';
 import { rawRequest, spawnServer, type SpawnedServer } from '../helpers/http.js';
 
 const pkgDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const exampleDir = path.resolve(pkgDir, '..', '..', 'examples', 'app');
 const buildDir = path.join(exampleDir, 'build');
-
-const zstdSupported = detectZstd() !== null;
 
 function findFile(dir: string, predicate: (file: string) => boolean): string | undefined {
 	for (const entry of readdirSync(dir, { withFileTypes: true, recursive: true })) {
@@ -39,12 +36,12 @@ describe('build output', () => {
 		expect(existsSync(path.join(buildDir, 'prerendered'))).toBe(true);
 	});
 
-	it('generated .gz and .br sidecars for eligible assets (and .zst when supported)', () => {
+	it('generated .gz, .br and .zst sidecars for eligible assets', () => {
 		const large = path.join(buildDir, 'client', 'large.txt');
 		expect(existsSync(large)).toBe(true);
 		expect(existsSync(`${large}.gz`)).toBe(true);
 		expect(existsSync(`${large}.br`)).toBe(true);
-		expect(existsSync(`${large}.zst`)).toBe(zstdSupported);
+		expect(existsSync(`${large}.zst`)).toBe(true);
 
 		expect(existsSync(path.join(buildDir, 'client', 'small.txt.gz'))).toBe(false);
 
@@ -107,14 +104,10 @@ describe('emitted server (e2e)', () => {
 		const preferred = await rawRequest(`${server.baseUrl}/large.txt`, {
 			headers: { 'accept-encoding': 'zstd, br, gzip' }
 		});
-		if (zstdSupported) {
-			expect(preferred.headers['content-encoding']).toBe('zstd');
-			const zstdDecompress = (zlib as unknown as { zstdDecompressSync: (b: Buffer) => Buffer })
-				.zstdDecompressSync;
-			expect(zstdDecompress(preferred.body)).toEqual(LARGE());
-		} else {
-			expect(preferred.headers['content-encoding']).toBe('br');
-		}
+		expect(preferred.headers['content-encoding']).toBe('zstd');
+		const zstdDecompress = (zlib as unknown as { zstdDecompressSync: (b: Buffer) => Buffer })
+			.zstdDecompressSync;
+		expect(zstdDecompress(preferred.body)).toEqual(LARGE());
 	});
 
 	it('serves immutable assets with immutable cache headers', async () => {

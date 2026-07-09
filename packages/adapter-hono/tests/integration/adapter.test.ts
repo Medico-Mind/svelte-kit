@@ -7,7 +7,6 @@ import type { Builder } from '@sveltejs/kit';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import adapter, { type RuntimeConfig } from '../../src/index.js';
-import { detectZstd } from '../../src/compress.js';
 import { rawRequest, spawnServer, type SpawnedServer } from '../helpers/http.js';
 
 const pkgDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -18,8 +17,6 @@ const out = path.join(scratch, 'build');
 const LARGE = 'static text that compresses well. '.repeat(200);
 const PRERENDERED_HTML = `<html><body>prerendered ${'y'.repeat(2000)}</body></html>`;
 const IMMUTABLE_JS = `export const chunk = ${JSON.stringify('z'.repeat(2000))};`;
-
-const zstdSupported = detectZstd() !== null;
 
 /**
  * Stands in for SvelteKit's generated server module: same surface
@@ -121,7 +118,7 @@ describe('adapter.adapt()', () => {
 	it('writes precompressed sidecars for eligible files only', () => {
 		expect(existsSync(path.join(out, 'client/large.txt.gz'))).toBe(true);
 		expect(existsSync(path.join(out, 'client/large.txt.br'))).toBe(true);
-		expect(existsSync(path.join(out, 'client/large.txt.zst'))).toBe(zstdSupported);
+		expect(existsSync(path.join(out, 'client/large.txt.zst'))).toBe(true);
 		expect(existsSync(path.join(out, 'client/small.txt.gz'))).toBe(false);
 		expect(existsSync(path.join(out, 'prerendered/prerendered.html.gz'))).toBe(true);
 	});
@@ -161,7 +158,7 @@ describe('adapter.adapt()', () => {
 			const negotiated = await rawRequest(`${server.baseUrl}/large.txt`, {
 				headers: { 'accept-encoding': 'zstd, br, gzip' }
 			});
-			expect(negotiated.headers['content-encoding']).toBe(zstdSupported ? 'zstd' : 'br');
+			expect(negotiated.headers['content-encoding']).toBe('zstd');
 		});
 
 		it('serves immutable assets with immutable cache headers', async () => {
