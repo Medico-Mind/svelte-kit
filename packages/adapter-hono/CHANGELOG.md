@@ -1,5 +1,11 @@
 # @medicomind/svelte-adapter-hono
 
+## 0.4.0
+
+### Minor Changes
+
+- a0c6372: Use @medicomind/rolldown-compression for faster compression
+
 ## 0.3.0
 
 ### Minor Changes
