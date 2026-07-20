@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildHonoApp, type BuildAppOptions } from '../../src/runtime/app.js';
 
 const PAGE = `<html><body>prerendered page ${'x'.repeat(64)}</body></html>`;
-const ASSET = 'static asset content '.repeat(20);
+const ASSET = 'static asset content '.repeat(60);
 
 let clientRoot: string;
 let prerenderedRoot: string;
@@ -195,6 +195,46 @@ describe('SSR fallthrough', () => {
 
 	it('rejects an invalid xffDepth at construction time', () => {
 		expect(() => makeApp({ xffDepth: 0 })).toThrow(/positive integer/);
+	});
+});
+
+describe('compress on demand', () => {
+	it('compresses SSR responses when enabled', async () => {
+		const response = await makeApp({ compressOnDemand: true }).request('/anything/else', {
+			headers: { 'accept-encoding': 'gzip' }
+		});
+		expect(response.headers.get('content-encoding')).toBe('gzip');
+		expect(response.headers.get('vary')).toBe('accept-encoding');
+		expect(zlib.gunzipSync(Buffer.from(await response.arrayBuffer())).toString()).toBe(
+			'ssr:/anything/else'
+		);
+	});
+
+	it('is off by default', async () => {
+		const response = await makeApp().request('/anything/else', {
+			headers: { 'accept-encoding': 'gzip' }
+		});
+		expect(response.headers.get('content-encoding')).toBeNull();
+		expect(await response.text()).toBe('ssr:/anything/else');
+	});
+
+	it('keeps serving precompressed sidecars untouched', async () => {
+		const response = await makeApp({ compressOnDemand: true }).request('/asset.txt', {
+			headers: { 'accept-encoding': 'gzip' }
+		});
+		expect(response.headers.get('content-encoding')).toBe('gzip');
+		// the sidecar path declares its exact size; on-demand compression cannot
+		expect(response.headers.get('content-length')).toBe(String(zlib.gzipSync(ASSET).byteLength));
+	});
+
+	it('compresses static files that lack a sidecar for the negotiated encoding', async () => {
+		const response = await makeApp({ compressOnDemand: true }).request('/asset.txt', {
+			headers: { 'accept-encoding': 'br' }
+		});
+		expect(response.headers.get('content-encoding')).toBe('br');
+		expect(zlib.brotliDecompressSync(Buffer.from(await response.arrayBuffer())).toString()).toBe(
+			ASSET
+		);
 	});
 });
 

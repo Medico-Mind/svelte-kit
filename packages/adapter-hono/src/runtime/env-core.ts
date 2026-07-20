@@ -14,6 +14,7 @@ export const RUNTIME_ENV_VARS = [
 	'ADDRESS_HEADER',
 	'XFF_DEPTH',
 	'BODY_SIZE_LIMIT',
+	'COMPRESS_ON_DEMAND',
 	'SHUTDOWN_TIMEOUT',
 	'IDLE_TIMEOUT'
 ] as const;
@@ -48,6 +49,17 @@ export function createEnv(
 		return key in source ? source[key] : fallback;
 	};
 	return reader as EnvReader;
+}
+
+/**
+ * Parses a boolean environment variable: `true`/`1` (case-insensitive) are
+ * true, `false`/`0`/empty are false. Throws on anything else.
+ */
+export function parseBooleanEnv(input: string): boolean {
+	const value = input.trim().toLowerCase();
+	if (value === 'true' || value === '1') return true;
+	if (value === 'false' || value === '0' || value === '') return false;
+	throw new Error(`Invalid boolean '${input}'. Expected 'true'/'1' or 'false'/'0'.`);
 }
 
 const SIZE_UNITS: Record<string, number> = {

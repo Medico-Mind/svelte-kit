@@ -147,6 +147,40 @@ describe('emitted server (e2e)', () => {
 		expect(response.body.toString().length).toBeGreaterThan(0);
 	});
 
+	it('does not compress SSR responses by default', async () => {
+		const response = await rawRequest(`${server.baseUrl}/`, {
+			headers: { 'accept-encoding': 'gzip, br, zstd' }
+		});
+		expect(response.status).toBe(200);
+		expect(response.headers['content-encoding']).toBeUndefined();
+	});
+
+	it('compresses SSR responses on the fly with COMPRESS_ON_DEMAND=true', async () => {
+		const dedicated = await spawnServer(path.join(buildDir, 'index.js'), {
+			COMPRESS_ON_DEMAND: 'true'
+		});
+		try {
+			const gzip = await rawRequest(`${dedicated.baseUrl}/`, {
+				headers: { 'accept-encoding': 'gzip' }
+			});
+			expect(gzip.status).toBe(200);
+			expect(gzip.headers['content-encoding']).toBe('gzip');
+			expect(gzip.headers.vary).toBe('accept-encoding');
+			expect(gzip.headers['content-length']).toBeUndefined();
+			expect(zlib.gunzipSync(gzip.body).toString()).toContain('Hello from SSR');
+
+			// precompressed sidecars still win over on-the-fly compression
+			const sidecar = await rawRequest(`${dedicated.baseUrl}/large.txt`, {
+				headers: { 'accept-encoding': 'gzip' }
+			});
+			expect(sidecar.headers['content-encoding']).toBe('gzip');
+			expect(sidecar.headers['content-length']).toBeDefined();
+			expect(zlib.gunzipSync(sidecar.body)).toEqual(LARGE());
+		} finally {
+			await dedicated.stop();
+		}
+	}, 60_000);
+
 	it('finishes in-flight requests on SIGTERM and exits cleanly', async () => {
 		const dedicated = await spawnServer(path.join(buildDir, 'index.js'));
 		const inflight = rawRequest(`${dedicated.baseUrl}/slow`);

@@ -10,7 +10,7 @@ import { manifest, prerendered } from 'MANIFEST';
 import { Server } from 'SERVER';
 
 import { buildHonoApp } from '../runtime/app.js';
-import { parseBodySizeLimit } from '../runtime/env-core.js';
+import { parseBodySizeLimit, parseBooleanEnv } from '../runtime/env-core.js';
 
 /** Root of the emitted build output (this file's directory). */
 const dir = path.dirname(fileURLToPath(import.meta.url));
@@ -48,6 +48,7 @@ export const app = buildHonoApp({
 		? { root: prerenderedRoot, prerenderedPaths: prerendered }
 		: undefined,
 	ssr: (request, context) => server.respond(request, context),
+	compressOnDemand: parseBooleanEnv(env('COMPRESS_ON_DEMAND', 'false')),
 	origin: env('ORIGIN'),
 	protocolHeader: headerEnv('PROTOCOL_HEADER'),
 	hostHeader: headerEnv('HOST_HEADER'),

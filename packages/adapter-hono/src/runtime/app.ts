@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 
 import { resolveClientAddress, validateXffDepth } from './address.js';
 import { createAssetManifest, serveAsset } from './assets.js';
+import { compressOnDemand } from './compress-on-demand.js';
 import { lookupPrerendered, trailingSlashRedirect } from './prerendered.js';
 import { BodySizeLimitError, prepareSsrRequest, type SsrRequestConfig } from './request.js';
 
@@ -30,6 +31,12 @@ export interface BuildAppOptions extends SsrRequestConfig {
 		/** Prerendered route paths from the SvelteKit manifest, used for trailing-slash redirects. */
 		prerenderedPaths?: ReadonlySet<string>;
 	};
+	/**
+	 * Compress responses on the fly with `node:zlib` (negotiated via
+	 * `Accept-Encoding`, `zstd > br > gzip`). Responses that already carry a
+	 * `content-encoding` — e.g. precompressed sidecars — pass through untouched.
+	 */
+	compressOnDemand?: boolean;
 	/** Lowercased header to resolve the client IP from (e.g. `x-forwarded-for`). */
 	addressHeader?: string | undefined;
 	/** `x-forwarded-for` depth, counted from the right. Default 1. */
@@ -65,6 +72,10 @@ export function buildHonoApp(options: BuildAppOptions): Hono {
 	if (options.xffDepth !== undefined) validateXffDepth(options.xffDepth);
 
 	const app = new Hono();
+
+	if (options.compressOnDemand) {
+		app.use(compressOnDemand());
+	}
 
 	if (options.client) {
 		const manifest = createAssetManifest(options.client.root);

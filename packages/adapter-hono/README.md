@@ -103,6 +103,7 @@ interface RuntimeConfig {
 	addressHeader?: string; // ADDRESS_HEADER    — e.g. 'x-forwarded-for'
 	xffDepth?: number; // XFF_DEPTH         — positive integer
 	bodySizeLimit?: number | string; // BODY_SIZE_LIMIT   — bytes, 'K'/'M'/'G' suffix or Infinity
+	compressOnDemand?: boolean; // COMPRESS_ON_DEMAND — on-the-fly compression of dynamic responses
 	shutdownTimeout?: number; // SHUTDOWN_TIMEOUT  — seconds ≥ 0
 	idleTimeout?: number; // IDLE_TIMEOUT      — seconds ≥ 0
 }
@@ -113,6 +114,16 @@ Values are validated when `svelte.config.js` is loaded — an unknown field or a
 ### Serving negotiation
 
 For static assets and prerendered pages the server parses `Accept-Encoding` with q-values and picks the best available sidecar. When q-values tie, preference is **`zstd` > `br` > `gzip` > identity**. Responses carry the correct `content-encoding`, the original `content-type` and `vary: accept-encoding`. Range requests are never served from compressed sidecars. When no sidecar matches, the identity file is streamed.
+
+### Compress on demand
+
+Precompression only covers files that exist at build time. With `runtimeConfig: { compressOnDemand: true }` (or `COMPRESS_ON_DEMAND=true` at runtime) the server additionally compresses dynamic responses — SSR pages, endpoints, and any static file without a matching sidecar — on the fly with `node:zlib`, using the same `Accept-Encoding` negotiation and `zstd > br > gzip` tie-breaking. It's off by default.
+
+- Bodies are streamed through the encoder, never buffered; `content-length` is dropped and `vary: accept-encoding` added.
+- Levels are tuned for latency (gzip 6, brotli 4, zstd 3) — unlike the build-time precompression, which maxes them out.
+- Skipped for responses that already have a `content-encoding` (e.g. precompressed sidecars), carry `cache-control: no-transform`, declare a `content-length` under 1024 bytes, have status 206/304, or whose `content-type` isn't compressible (`text/*` except `text/event-stream`, `+json`/`+xml` syntaxes, JSON/JS/XML/SVG/WASM and a few font types).
+
+If a reverse proxy or CDN in front of the server already compresses responses, leave this off.
 
 ## Runtime environment variables
 

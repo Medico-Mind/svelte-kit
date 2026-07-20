@@ -91,6 +91,14 @@ export interface RuntimeConfig {
 	 */
 	bodySizeLimit?: number | string;
 	/**
+	 * Compress dynamic (SSR) responses on the fly with `node:zlib`, negotiated
+	 * via `Accept-Encoding` (`zstd > br > gzip` on q-value ties). Static assets
+	 * with precompressed sidecars are unaffected; assets without a matching
+	 * sidecar are compressed on the fly too.
+	 * Overrides the `COMPRESS_ON_DEMAND` environment variable (default `false`).
+	 */
+	compressOnDemand?: boolean;
+	/**
 	 * Seconds to wait for in-flight requests after `SIGINT`/`SIGTERM` before
 	 * force-closing sockets.
 	 * Overrides the `SHUTDOWN_TIMEOUT` environment variable (default `30`).
@@ -196,6 +204,11 @@ const RUNTIME_CONFIG_FIELDS: Record<
 		expected:
 			"a non-negative number of bytes, a string with an optional K/M/G suffix, or 'Infinity'",
 		ok: isBodySizeLimit
+	},
+	compressOnDemand: {
+		envVar: 'COMPRESS_ON_DEMAND',
+		expected: 'a boolean',
+		ok: (value) => typeof value === 'boolean'
 	},
 	shutdownTimeout: {
 		envVar: 'SHUTDOWN_TIMEOUT',

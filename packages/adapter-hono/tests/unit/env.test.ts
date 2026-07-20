@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createEnv, parseBodySizeLimit } from '../../src/runtime/env-core.js';
+import { createEnv, parseBodySizeLimit, parseBooleanEnv } from '../../src/runtime/env-core.js';
 
 describe('createEnv', () => {
 	it('reads unprefixed variables', () => {
@@ -53,6 +53,30 @@ describe('createEnv', () => {
 	it('prefers a present-but-empty override over source and fallback', () => {
 		const env = createEnv('', { HOST: 'env-host' }, { HOST: '' });
 		expect(env('HOST', '0.0.0.0')).toBe('');
+	});
+});
+
+describe('parseBooleanEnv', () => {
+	it('parses truthy values case-insensitively', () => {
+		expect(parseBooleanEnv('true')).toBe(true);
+		expect(parseBooleanEnv('TRUE')).toBe(true);
+		expect(parseBooleanEnv('1')).toBe(true);
+	});
+
+	it('parses falsy values, including empty', () => {
+		expect(parseBooleanEnv('false')).toBe(false);
+		expect(parseBooleanEnv('False')).toBe(false);
+		expect(parseBooleanEnv('0')).toBe(false);
+		expect(parseBooleanEnv('')).toBe(false);
+	});
+
+	it('tolerates surrounding whitespace', () => {
+		expect(parseBooleanEnv(' true ')).toBe(true);
+	});
+
+	it('throws on invalid input', () => {
+		expect(() => parseBooleanEnv('yes')).toThrow(/Invalid boolean/);
+		expect(() => parseBooleanEnv('enabled')).toThrow(/Invalid boolean/);
 	});
 });
 
