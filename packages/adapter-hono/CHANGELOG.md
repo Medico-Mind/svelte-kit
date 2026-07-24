@@ -1,5 +1,11 @@
 # @medicomind/svelte-adapter-hono
 
+## 1.0.1
+
+### Patch Changes
+
+- 743785e: Up rolldown compression version
+
 ## 1.0.0
 
 ### Major Changes
