@@ -34,8 +34,8 @@
 		"test:perf": "vitest run --config vitest.perf.config.ts"
 	},
 	"dependencies": {
-		"@medicomind/rolldown-compression": "^1.0.0",
-		"rolldown": "^1.1.4"
+		"@medicomind/rolldown-compression": "^2.0.0",
+		"rolldown": "^1.0.0"
 	},
 	"peerDependencies": {
 		"@hono/node-server": "^2.0.0",
