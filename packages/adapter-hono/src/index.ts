@@ -20,7 +20,13 @@ import {
 } from './compress.js';
 import { parseBodySizeLimit, type RuntimeEnvVar } from './runtime/env-core.js';
 
-export { DEFAULT_COMPRESS_EXTENSIONS, type PrecompressOptions } from './compress.js';
+export {
+	DEFAULT_COMPRESS_EXTENSIONS,
+	type BrotliPrecompressOptions,
+	type GzipPrecompressOptions,
+	type PrecompressOptions,
+	type ZstdPrecompressOptions
+} from './compress.js';
 
 /**
  * Runtime configuration fixed at build time.
@@ -119,7 +125,9 @@ export interface AdapterOptions {
 	/**
 	 * Precompress static assets and prerendered pages into `.gz`/`.br`/`.zst`
 	 * sidecars served via `Accept-Encoding` negotiation. `true` (the default)
-	 * enables all encodings; an object toggles them individually.
+	 * enables all encodings; an object toggles them individually, and each
+	 * encoding accepts an options object to tune its level (and, for brotli,
+	 * `windowBits`/`sectionSize`).
 	 */
 	precompress?: boolean | PrecompressOptions;
 	/** Prefix for the runtime environment variables (`PORT`, `HOST`, …). Default `''`. */

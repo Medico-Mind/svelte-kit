@@ -72,7 +72,25 @@ adapter({
 });
 ```
 
+Each encoding also accepts an options object instead of `true`, to trade ratio for build time:
+
+```js
+adapter({
+	precompress: {
+		gzip: { level: 6 }, // 0–9,  default 9
+		brotli: {
+			quality: 9, // 0–11, default 11
+			windowBits: 24, // 10–24, default 22 — a larger window compresses better but costs memory
+			sectionSize: 262144 // bytes per worker thread for large inputs, default 1 MiB
+		},
+		zstd: { level: 12 } // 1–22, default 19
+	}
+});
+```
+
 - Only files **≥ 1024 bytes** whose extension is in the `files` allowlist are compressed.
+- Out-of-range levels throw at config time.
+- `brotli.windowBits` up to 24 stays within RFC 7932, so browsers decode it; a larger window helps on big files at the cost of memory during compression and decompression.
 - Compression is powered by [`@medicomind/rolldown-compression`](https://github.com/Medico-Mind/rolldown-compression), a native (Rust, napi-rs) rolldown plugin that compresses files in parallel across all logical CPUs. We use it instead of `node:zlib` because it compressed build output about **2× faster** on our benchmarks — at the maximum compression levels above, precompression dominates build time for asset-heavy apps.
 
 ### `runtimeConfig`

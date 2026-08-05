@@ -39,19 +39,57 @@ describe('resolvePrecompressOptions', () => {
 		expect(resolvePrecompressOptions(undefined)).toBeNull();
 	});
 
-	it('enables everything for true', () => {
-		expect(ALL.brotli).toBe(true);
-		expect(ALL.gzip).toBe(true);
-		expect(ALL.zstd).toBe(true);
+	it('enables everything at the default levels for true', () => {
+		expect(ALL.brotli).toEqual({ quality: 11, windowBits: undefined, sectionSize: undefined });
+		expect(ALL.gzip).toEqual({ level: 9 });
+		expect(ALL.zstd).toEqual({ level: 19 });
 		expect([...ALL.extensions].sort()).toEqual([...DEFAULT_COMPRESS_EXTENSIONS].sort());
 	});
 
 	it('honors per-encoding toggles and a custom allowlist', () => {
 		const resolved = resolvePrecompressOptions({ brotli: false, files: ['CSS', 'js'] })!;
-		expect(resolved.brotli).toBe(false);
-		expect(resolved.gzip).toBe(true);
-		expect(resolved.zstd).toBe(true);
+		expect(resolved.brotli).toBeNull();
+		expect(resolved.gzip).toEqual({ level: 9 });
+		expect(resolved.zstd).toEqual({ level: 19 });
 		expect([...resolved.extensions].sort()).toEqual(['css', 'js']);
+	});
+
+	it('accepts per-encoding option objects', () => {
+		const resolved = resolvePrecompressOptions({
+			gzip: { level: 6 },
+			brotli: { quality: 5, windowBits: 20, sectionSize: 262144 },
+			zstd: { level: 3 }
+		})!;
+		expect(resolved.gzip).toEqual({ level: 6 });
+		expect(resolved.brotli).toEqual({ quality: 5, windowBits: 20, sectionSize: 262144 });
+		expect(resolved.zstd).toEqual({ level: 3 });
+	});
+
+	it('fills in defaults for omitted fields of an option object', () => {
+		const resolved = resolvePrecompressOptions({ brotli: { windowBits: 24 }, gzip: {} })!;
+		expect(resolved.brotli).toEqual({ quality: 11, windowBits: 24, sectionSize: undefined });
+		expect(resolved.gzip).toEqual({ level: 9 });
+	});
+
+	it('rejects out-of-range levels', () => {
+		expect(() => resolvePrecompressOptions({ gzip: { level: 10 } })).toThrow(
+			/precompress\.gzip\.level/
+		);
+		expect(() => resolvePrecompressOptions({ brotli: { quality: 12 } })).toThrow(
+			/precompress\.brotli\.quality/
+		);
+		expect(() => resolvePrecompressOptions({ brotli: { windowBits: 9 } })).toThrow(
+			/precompress\.brotli\.windowBits/
+		);
+		expect(() => resolvePrecompressOptions({ brotli: { sectionSize: 0 } })).toThrow(
+			/precompress\.brotli\.sectionSize/
+		);
+		expect(() => resolvePrecompressOptions({ zstd: { level: 0 } })).toThrow(
+			/precompress\.zstd\.level/
+		);
+		expect(() => resolvePrecompressOptions({ gzip: { level: 1.5 } })).toThrow(
+			/expected an integer between 0 and 9/
+		);
 	});
 });
 
@@ -105,6 +143,17 @@ describe('compressDirectory', () => {
 		expect(existsSync(path.join(dir, 'page.html.gz'))).toBe(true);
 		expect(existsSync(path.join(dir, 'page.html.br'))).toBe(false);
 		expect(existsSync(path.join(dir, 'page.html.zst'))).toBe(false);
+	});
+
+	it('applies per-encoding levels', async () => {
+		const low = resolvePrecompressOptions({ gzip: false, zstd: false, brotli: { quality: 0 } })!;
+		await compressDirectory(dir, low);
+		const cheap = readFileSync(path.join(dir, 'page.html.br'));
+		expect(zlib.brotliDecompressSync(cheap)).toEqual(readFileSync(path.join(dir, 'page.html')));
+
+		rmSync(path.join(dir, 'page.html.br'));
+		await compressDirectory(dir, ALL);
+		expect(readFileSync(path.join(dir, 'page.html.br')).byteLength).toBeLessThan(cheap.byteLength);
 	});
 
 	it('does not re-compress existing sidecars', async () => {

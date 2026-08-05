@@ -32,32 +32,93 @@ export const DEFAULT_MIN_COMPRESS_SIZE = 1024;
 
 const SIDECAR_SUFFIXES = ['.gz', '.br', '.zst'];
 
+/** Compression level defaults — maxed out, since precompression happens once at build time. */
+export const DEFAULT_GZIP_LEVEL = 9;
+export const DEFAULT_BROTLI_QUALITY = 11;
+export const DEFAULT_ZSTD_LEVEL = 19;
+
+/** Tuning for the `.gz` sidecars. */
+export interface GzipPrecompressOptions {
+	/** zlib compression level, `0`–`9`. Default {@link DEFAULT_GZIP_LEVEL}. */
+	level?: number;
+}
+
+/** Tuning for the `.br` sidecars. */
+export interface BrotliPrecompressOptions {
+	/** Brotli quality, `0`–`11`. Default {@link DEFAULT_BROTLI_QUALITY}. */
+	quality?: number;
+	/** log2 of the brotli window size, `10`–`24`. Default `22` (the brotli default). */
+	windowBits?: number;
+	/**
+	 * Target bytes per worker thread when a large input is split across the
+	 * native brotli worker pool; inputs at least twice this size take the
+	 * multithreaded path. Default 1 MiB. Smaller sections finish large files
+	 * faster at a slight cost in compression ratio.
+	 */
+	sectionSize?: number;
+}
+
+/** Tuning for the `.zst` sidecars. */
+export interface ZstdPrecompressOptions {
+	/** zstd level, `1`–`22`. Default {@link DEFAULT_ZSTD_LEVEL}. */
+	level?: number;
+}
+
 /**
  * `precompress` adapter option: `true` enables gzip + brotli + zstd with the
- * default extension allowlist; an object toggles encodings individually.
+ * default extension allowlist; an object toggles encodings individually. Each
+ * encoding accepts `true`/`false` or an options object that tunes it.
  */
 export interface PrecompressOptions {
-	/** Generate `.br` sidecars. Default `true`. */
-	brotli?: boolean;
-	/** Generate `.gz` sidecars. Default `true`. */
-	gzip?: boolean;
-	/** Generate `.zst` sidecars. Default `true`. */
-	zstd?: boolean;
+	/** Generate `.br` sidecars, optionally tuned. Default `true`. */
+	brotli?: boolean | BrotliPrecompressOptions;
+	/** Generate `.gz` sidecars, optionally tuned. Default `true`. */
+	gzip?: boolean | GzipPrecompressOptions;
+	/** Generate `.zst` sidecars, optionally tuned. Default `true`. */
+	zstd?: boolean | ZstdPrecompressOptions;
 	/** File extension allowlist (without dots). Defaults to {@link DEFAULT_COMPRESS_EXTENSIONS}. */
 	files?: string[];
 }
 
-/** Normalized shape of {@link PrecompressOptions}. */
+/**
+ * Normalized shape of {@link PrecompressOptions}: each encoding is either its
+ * fully-defaulted settings or `null` when disabled.
+ */
 export interface ResolvedPrecompressOptions {
-	brotli: boolean;
-	gzip: boolean;
-	zstd: boolean;
+	brotli: (BrotliPrecompressOptions & { quality: number }) | null;
+	gzip: { level: number } | null;
+	zstd: { level: number } | null;
 	extensions: Set<string>;
+}
+
+function checkInteger(
+	value: number | undefined,
+	field: string,
+	min: number,
+	max: number
+): number | undefined {
+	if (value === undefined) return undefined;
+	if (!Number.isInteger(value) || value < min || value > max) {
+		throw new Error(
+			`@medicomind/svelte-adapter-hono: invalid 'precompress.${field}' value ${String(value)} — expected an integer between ${min} and ${max}`
+		);
+	}
+	return value;
+}
+
+/** `false` disables the encoding; `true`/`undefined` mean "enabled with defaults". */
+function resolveEncoding<Options extends object, Resolved>(
+	value: boolean | Options | undefined,
+	resolve: (options: Options) => Resolved
+): Resolved | null {
+	if (value === false) return null;
+	return resolve(value === undefined || value === true ? ({} as Options) : value);
 }
 
 /**
  * Normalizes the `precompress` option. Returns `null` when precompression is
- * disabled entirely.
+ * disabled entirely. Throws on out-of-range levels so a typo fails at config
+ * time rather than mid-build.
  */
 export function resolvePrecompressOptions(
 	precompress: boolean | PrecompressOptions | undefined
@@ -65,9 +126,17 @@ export function resolvePrecompressOptions(
 	if (!precompress) return null;
 	const object = precompress === true ? {} : precompress;
 	return {
-		brotli: object.brotli ?? true,
-		gzip: object.gzip ?? true,
-		zstd: object.zstd ?? true,
+		brotli: resolveEncoding(object.brotli, (options: BrotliPrecompressOptions) => ({
+			quality: checkInteger(options.quality, 'brotli.quality', 0, 11) ?? DEFAULT_BROTLI_QUALITY,
+			windowBits: checkInteger(options.windowBits, 'brotli.windowBits', 10, 24),
+			sectionSize: checkInteger(options.sectionSize, 'brotli.sectionSize', 1, 0xffffffff)
+		})),
+		gzip: resolveEncoding(object.gzip, (options: GzipPrecompressOptions) => ({
+			level: checkInteger(options.level, 'gzip.level', 0, 9) ?? DEFAULT_GZIP_LEVEL
+		})),
+		zstd: resolveEncoding(object.zstd, (options: ZstdPrecompressOptions) => ({
+			level: checkInteger(options.level, 'zstd.level', 1, 22) ?? DEFAULT_ZSTD_LEVEL
+		})),
 		extensions: new Set(
 			(object.files ?? DEFAULT_COMPRESS_EXTENSIONS).map((ext) => ext.toLowerCase())
 		)
@@ -112,9 +181,10 @@ const ENTRY_FILE_NAME = 'adapter-hono-precompress-entry';
 /**
  * Walks `directory` and writes `.gz` / `.br` / `.zst` sidecars for every file
  * that matches the extension allowlist and the minimum size, using the native
- * `@medicomind/rolldown-compression` rolldown plugin (gzip 9 / brotli 11 /
- * zstd 19). The eligible files are fed to the plugin as emitted assets of a
- * virtual-entry rolldown build that writes back into `directory`.
+ * `@medicomind/rolldown-compression` rolldown plugin at the levels resolved in
+ * `options` (gzip 9 / brotli 11 / zstd 19 unless tuned). The eligible files are
+ * fed to the plugin as emitted assets of a virtual-entry rolldown build that
+ * writes back into `directory`.
  */
 export async function compressDirectory(
 	directory: string,
@@ -127,9 +197,9 @@ export async function compressDirectory(
 	if (!existsSync(directory)) return result;
 
 	const algorithms: DefineAlgorithmResult[] = [];
-	if (options.gzip) algorithms.push(defineAlgorithm('gzip', { level: 9 }));
-	if (options.brotli) algorithms.push(defineAlgorithm('brotli', { quality: 11 }));
-	if (options.zstd) algorithms.push(defineAlgorithm('zstd', { level: 19 }));
+	if (options.gzip) algorithms.push(defineAlgorithm('gzip', options.gzip));
+	if (options.brotli) algorithms.push(defineAlgorithm('brotli', options.brotli));
+	if (options.zstd) algorithms.push(defineAlgorithm('zstd', options.zstd));
 	if (algorithms.length === 0 || options.extensions.size === 0) return result;
 
 	const files = await collectFiles(directory, options.extensions, minSize);
