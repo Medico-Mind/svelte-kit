@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 
 import { resolveClientAddress, validateXffDepth } from './address.js';
-import { createAssetManifest, serveAsset } from './assets.js';
+import { serveAsset, type AssetManifest } from './assets.js';
 import { compressOnDemand } from './compress-on-demand.js';
 import { lookupPrerendered, trailingSlashRedirect } from './prerendered.js';
 import { BodySizeLimitError, prepareSsrRequest, type SsrRequestConfig } from './request.js';
@@ -15,19 +15,19 @@ export interface SsrContext {
 /** SSR entry point — `Server.respond()` from `@sveltejs/kit` fits this shape. */
 export type SsrHandler = (request: Request, context: SsrContext) => Response | Promise<Response>;
 
-/** Options for {@link buildHonoApp}. All file lookups are resolved once at construction. */
+/** Options for {@link buildHonoApp}. Asset metadata is supplied by the generated build manifest. */
 export interface BuildAppOptions extends SsrRequestConfig {
 	/** Renders non-static routes; typically `Server.respond` from `@sveltejs/kit`. */
 	ssr: SsrHandler;
-	/** Static client assets directory (`build/client`). */
+	/** Generated metadata for static client assets (`build/client`). */
 	client?: {
-		root: string;
+		manifest: AssetManifest;
 		/** Pathname prefix (e.g. `/_app/immutable/`) that gets immutable cache headers. */
 		immutablePathPrefix?: string;
 	};
-	/** Prerendered pages directory (`build/prerendered`). */
+	/** Generated metadata for prerendered pages (`build/prerendered`). */
 	prerendered?: {
-		root: string;
+		manifest: AssetManifest;
 		/** Prerendered route paths from the SvelteKit manifest, used for trailing-slash redirects. */
 		prerenderedPaths?: ReadonlySet<string>;
 	};
@@ -73,12 +73,8 @@ export function buildHonoApp(options: BuildAppOptions): Hono {
 
 	const app = new Hono();
 
-	if (options.compressOnDemand) {
-		app.use(compressOnDemand());
-	}
-
 	if (options.client) {
-		const manifest = createAssetManifest(options.client.root);
+		const manifest = options.client.manifest;
 		const immutablePrefix = options.client.immutablePathPrefix;
 
 		app.use(async (c, next) => {
@@ -87,15 +83,16 @@ export function buildHonoApp(options: BuildAppOptions): Hono {
 			const entry = pathname === undefined ? undefined : manifest.get(pathname);
 			if (!entry) return next();
 
-			const immutable = immutablePrefix !== undefined && entry.pathname.startsWith(immutablePrefix);
+			const immutable = immutablePrefix !== undefined && pathname!.startsWith(immutablePrefix);
 			return serveAsset(c.req.raw, entry, {
-				cacheControl: immutable ? IMMUTABLE_CACHE_CONTROL : MUTABLE_CACHE_CONTROL
+				cacheControl: immutable ? IMMUTABLE_CACHE_CONTROL : MUTABLE_CACHE_CONTROL,
+				compressOnDemand: options.compressOnDemand
 			});
 		});
 	}
 
 	if (options.prerendered) {
-		const manifest = createAssetManifest(options.prerendered.root);
+		const manifest = options.prerendered.manifest;
 		const prerenderedPaths = options.prerendered.prerenderedPaths ?? new Set<string>();
 
 		app.use(async (c, next) => {
@@ -111,10 +108,16 @@ export function buildHonoApp(options: BuildAppOptions): Hono {
 			}
 
 			const entry = lookupPrerendered(manifest, pathname);
-			if (entry) return serveAsset(c.req.raw, entry);
+			if (entry)
+				return serveAsset(c.req.raw, entry, { compressOnDemand: options.compressOnDemand });
 
 			return next();
 		});
+	}
+
+	// Static responses select their representation and validator together in serveAsset.
+	if (options.compressOnDemand) {
+		app.use(compressOnDemand());
 	}
 
 	const addressConfig = { addressHeader: options.addressHeader, xffDepth: options.xffDepth };

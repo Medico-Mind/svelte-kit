@@ -7,10 +7,9 @@ function manifestOf(...pathnames: string[]): AssetManifest {
 	const manifest: AssetManifest = new Map();
 	for (const pathname of pathnames) {
 		manifest.set(pathname, {
-			pathname,
-			filePath: `/fake${pathname}`,
+			filePath: pathname,
 			size: 1,
-			mtime: new Date(0),
+			contentType: 'text/html',
 			etag: 'x',
 			encodings: new Map()
 		} satisfies AssetEntry);
@@ -29,22 +28,22 @@ describe('lookupPrerendered', () => {
 	);
 
 	it('resolves the root to /index.html', () => {
-		expect(lookupPrerendered(manifest, '/')?.pathname).toBe('/index.html');
+		expect(lookupPrerendered(manifest, '/')?.filePath).toBe('/index.html');
 	});
 
 	it('resolves extensionless paths to <path>.html then <path>/index.html', () => {
-		expect(lookupPrerendered(manifest, '/about')?.pathname).toBe('/about.html');
-		expect(lookupPrerendered(manifest, '/docs')?.pathname).toBe('/docs/index.html');
-		expect(lookupPrerendered(manifest, '/mixed')?.pathname).toBe('/mixed.html');
+		expect(lookupPrerendered(manifest, '/about')?.filePath).toBe('/about.html');
+		expect(lookupPrerendered(manifest, '/docs')?.filePath).toBe('/docs/index.html');
+		expect(lookupPrerendered(manifest, '/mixed')?.filePath).toBe('/mixed.html');
 	});
 
 	it('resolves trailing-slash paths to <path>/index.html then <path>.html', () => {
-		expect(lookupPrerendered(manifest, '/docs/')?.pathname).toBe('/docs/index.html');
-		expect(lookupPrerendered(manifest, '/about/')?.pathname).toBe('/about.html');
+		expect(lookupPrerendered(manifest, '/docs/')?.filePath).toBe('/docs/index.html');
+		expect(lookupPrerendered(manifest, '/about/')?.filePath).toBe('/about.html');
 	});
 
 	it('resolves exact file paths (prerendered endpoints)', () => {
-		expect(lookupPrerendered(manifest, '/data.json')?.pathname).toBe('/data.json');
+		expect(lookupPrerendered(manifest, '/data.json')?.filePath).toBe('/data.json');
 	});
 
 	it('returns undefined for unknown paths', () => {

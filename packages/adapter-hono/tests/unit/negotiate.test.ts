@@ -71,7 +71,7 @@ describe('selectEncoding', () => {
 	it('applies the wildcard to unlisted encodings', () => {
 		expect(selectEncoding('*', ALL)).toBe('zstd');
 		expect(selectEncoding('*;q=0.1, gzip;q=0.9', ALL)).toBe('gzip');
-		expect(selectEncoding('*;q=0', ALL)).toBe('identity');
+		expect(selectEncoding('*;q=0', ALL)).toBeUndefined();
 		expect(selectEncoding('*;q=0, br', ALL)).toBe('br');
 	});
 
@@ -79,12 +79,21 @@ describe('selectEncoding', () => {
 		expect(selectEncoding('identity;q=0, gzip', ALL)).toBe('gzip');
 	});
 
-	it('falls back to identity when identity;q=0 but nothing else matches (pragmatic)', () => {
-		expect(selectEncoding('identity;q=0', ALL)).toBe('identity');
+	it('rejects when identity is forbidden and nothing else matches', () => {
+		expect(selectEncoding('identity;q=0', ALL)).toBeUndefined();
 	});
 
 	it('ignores unknown encodings', () => {
 		expect(selectEncoding('compress, deflate', ALL)).toBe('identity');
 		expect(selectEncoding('compress, gzip;q=0.2', ALL)).toBe('gzip');
 	});
+});
+
+it('ranks explicit identity preferences and handles wildcard exclusions', () => {
+	expect(selectEncoding('identity;q=1, br;q=0.5', ALL)).toBe('identity');
+	expect(selectEncoding('identity;q=0.5, gzip;q=0.5', ALL)).toBe('gzip');
+	expect(selectEncoding('*;q=0, identity;q=0.5', ALL)).toBe('identity');
+	expect(selectEncoding('identity;q=0', [])).toBeUndefined();
+	expect(selectEncoding('br;q=0, *;q=0.5', ALL)).toBe('zstd');
+	expect(parseEncodingHeader('gzip;q=0.5oops').get('gzip')).toBe(0);
 });

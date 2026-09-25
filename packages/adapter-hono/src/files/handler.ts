@@ -1,10 +1,11 @@
 import 'SHIMS';
 
-import { createReadStream, existsSync } from 'node:fs';
+import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
+import { client, prerendered as prerenderedAssets } from 'ASSETS';
 import { env } from 'ENV';
 import { manifest, prerendered } from 'MANIFEST';
 import { Server } from 'SERVER';
@@ -31,9 +32,6 @@ if (!Number.isInteger(xffDepth) || xffDepth < 1) {
 	throw new Error(`XFF_DEPTH must be a positive integer, got '${env('XFF_DEPTH', '1')}'`);
 }
 
-const clientRoot = path.join(dir, 'client');
-const prerenderedRoot = path.join(dir, 'prerendered');
-
 /**
  * The composable Hono app serving this SvelteKit build:
  * static assets → prerendered pages → SSR.
@@ -41,12 +39,8 @@ const prerenderedRoot = path.join(dir, 'prerendered');
  * Mount it inside your own Hono server via `app.route('/', app)`.
  */
 export const app = buildHonoApp({
-	client: existsSync(clientRoot)
-		? { root: clientRoot, immutablePathPrefix: `/${manifest.appPath}/immutable/` }
-		: undefined,
-	prerendered: existsSync(prerenderedRoot)
-		? { root: prerenderedRoot, prerenderedPaths: prerendered }
-		: undefined,
+	client: { manifest: client, immutablePathPrefix: `/${manifest.appPath}/immutable/` },
+	prerendered: { manifest: prerenderedAssets, prerenderedPaths: prerendered },
 	ssr: (request, context) => server.respond(request, context),
 	compressOnDemand: parseBooleanEnv(env('COMPRESS_ON_DEMAND', 'false')),
 	origin: env('ORIGIN'),

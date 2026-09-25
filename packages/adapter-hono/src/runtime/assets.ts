@@ -1,78 +1,30 @@
-import { createReadStream, readdirSync, statSync } from 'node:fs';
-import path from 'node:path';
+import { createReadStream } from 'node:fs';
 import { Readable } from 'node:stream';
 
-import { contentType } from './mime.js';
 import {
-	COMPRESSED_ENCODINGS,
-	SIDECAR_EXTENSIONS,
-	selectEncoding,
-	type CompressedEncoding
-} from './negotiate.js';
+	compressBody,
+	isCompressibleContentType,
+	MIN_COMPRESS_SIZE
+} from './compress-on-demand.js';
+import { COMPRESSED_ENCODINGS, selectEncoding, type CompressedEncoding } from './negotiate.js';
 
 /** One concrete file on disk that can satisfy a request. */
 export interface AssetVariant {
 	filePath: string;
+	/** Quoted SHA-256 of these exact bytes. */
+	etag: string;
 	size: number;
 }
 
 /** A servable asset plus its precompressed sidecar variants. */
 export interface AssetEntry extends AssetVariant {
-	/** Decoded URL pathname this entry is served under, e.g. `/_app/x.js`. */
-	pathname: string;
-	mtime: Date;
-	/** Opaque validator (without quotes/encoding suffix). */
-	etag: string;
+	contentType: string;
 	/** Available precompressed variants, keyed by content encoding. */
 	encodings: Map<CompressedEncoding, AssetVariant>;
 }
 
-/** Prebuilt pathname → entry lookup; resolved once at boot, no fs on the hot path. */
+/** Prebuilt pathname → entry lookup; generated at build time, no fs on the hot path. */
 export type AssetManifest = Map<string, AssetEntry>;
-
-function walk(root: string, dir: string, out: string[]): void {
-	for (const dirent of readdirSync(path.join(root, dir), { withFileTypes: true })) {
-		const rel = dir ? `${dir}/${dirent.name}` : dirent.name;
-		if (dirent.isDirectory()) walk(root, rel, out);
-		else if (dirent.isFile()) out.push(rel);
-	}
-}
-
-/**
- * Walks `root` once (at boot) and builds the asset manifest. Files named
- * `<asset>.gz` / `.br` / `.zst` next to `<asset>` are registered as
- * precompressed variants of it (and remain directly addressable as well).
- */
-export function createAssetManifest(root: string): AssetManifest {
-	const relPaths: string[] = [];
-	walk(root, '', relPaths);
-
-	const manifest: AssetManifest = new Map();
-
-	for (const rel of relPaths) {
-		const filePath = path.join(root, rel);
-		const stats = statSync(filePath);
-		manifest.set(`/${rel}`, {
-			pathname: `/${rel}`,
-			filePath,
-			size: stats.size,
-			mtime: stats.mtime,
-			etag: `${stats.size.toString(16)}-${stats.mtime.getTime().toString(16)}`,
-			encodings: new Map()
-		});
-	}
-
-	for (const encoding of COMPRESSED_ENCODINGS) {
-		const ext = SIDECAR_EXTENSIONS[encoding];
-		for (const [pathname, entry] of manifest) {
-			if (!pathname.endsWith(ext)) continue;
-			const base = manifest.get(pathname.slice(0, -ext.length));
-			base?.encodings.set(encoding, { filePath: entry.filePath, size: entry.size });
-		}
-	}
-
-	return manifest;
-}
 
 /** A single satisfiable byte range. */
 interface ByteRange {
@@ -111,6 +63,7 @@ export function parseRangeHeader(
 export interface ServeAssetOptions {
 	/** Value for the `cache-control` header; omitted when not set. */
 	cacheControl?: string | undefined;
+	compressOnDemand?: boolean | undefined;
 }
 
 function fileBody(filePath: string, range?: ByteRange): ReadableStream<Uint8Array> {
@@ -136,31 +89,42 @@ export function serveAsset(
 
 	const rangeHeader = request.headers.get('range');
 
-	// never negotiate encodings for range requests
-	const encoding =
-		rangeHeader || entry.encodings.size === 0
-			? 'identity'
-			: selectEncoding(request.headers.get('accept-encoding'), entry.encodings.keys());
+	const acceptEncoding = request.headers.get('accept-encoding');
+	const canCompress =
+		!rangeHeader &&
+		options.compressOnDemand &&
+		entry.size >= MIN_COMPRESS_SIZE &&
+		isCompressibleContentType(entry.contentType) &&
+		!/(?:^|,)\s*no-transform\s*(?:$|[,;])/i.test(options.cacheControl ?? '');
+	let encoding = selectEncoding(acceptEncoding, rangeHeader ? [] : entry.encodings.keys());
+	// Preserve sidecar preference; compress on demand only when no sidecar was selected.
+	if (canCompress && (encoding === 'identity' || encoding === undefined)) {
+		encoding = selectEncoding(acceptEncoding, COMPRESSED_ENCODINGS);
+	}
+	if (entry.encodings.size > 0 || canCompress || encoding === undefined)
+		headers.set('vary', 'accept-encoding');
+	if (encoding === undefined) return new Response(null, { status: 406, headers });
 
-	if (entry.encodings.size > 0) headers.set('vary', 'accept-encoding');
-
-	const variant: AssetVariant =
-		encoding === 'identity' ? entry : (entry.encodings.get(encoding) ?? entry);
-
-	const etag = `W/"${entry.etag}${encoding === 'identity' ? '' : `-${encoding}`}"`;
+	const sidecar = encoding === 'identity' ? undefined : entry.encodings.get(encoding);
+	const dynamic = encoding !== 'identity' && !sidecar;
+	const variant: AssetVariant = sidecar ?? entry;
+	// On-demand bytes may differ across zlib versions; their validator must be weak.
+	const etag = dynamic ? `W/"${entry.etag.slice(1, -1)}-runtime-${encoding}"` : variant.etag;
 	headers.set('etag', etag);
-	headers.set('last-modified', entry.mtime.toUTCString());
-	headers.set('content-type', contentType(entry.pathname));
+	headers.set('content-type', entry.contentType);
 	headers.set('accept-ranges', 'bytes');
 	if (encoding !== 'identity') headers.set('content-encoding', encoding);
 
-	if (request.headers.get('if-none-match') === etag) {
+	if (matchesIfNoneMatch(request.headers.get('if-none-match'), etag)) {
 		return new Response(null, { status: 304, headers });
 	}
 
 	const isHead = request.method === 'HEAD';
 
-	if (rangeHeader) {
+	if (
+		rangeHeader &&
+		(!request.headers.has('if-range') || request.headers.get('if-range') === etag)
+	) {
 		const range = parseRangeHeader(rangeHeader, variant.size);
 		if (range === 'unsatisfiable') {
 			headers.set('content-range', `bytes */${variant.size}`);
@@ -177,6 +141,21 @@ export function serveAsset(
 		// malformed range: fall through and serve the full file
 	}
 
-	headers.set('content-length', String(variant.size));
-	return new Response(isHead ? null : fileBody(variant.filePath), { status: 200, headers });
+	if (!dynamic) headers.set('content-length', String(variant.size));
+	const body = isHead ? null : fileBody(variant.filePath);
+	return new Response(
+		body && dynamic && encoding !== 'identity' ? compressBody(body, encoding, variant.size) : body,
+		{ status: 200, headers }
+	);
+}
+
+/** GET/HEAD use weak comparison, including lists and the wildcard. */
+export function matchesIfNoneMatch(header: string | null, etag: string): boolean {
+	if (!header) return false;
+	if (header === etag || header.trim() === '*') return true;
+	const opaque = etag.replace(/^W\//, '');
+	// Commas may occur inside an opaque tag, so do not split the field on commas.
+	return [...header.matchAll(/(?:^|,)\s*(?:W\/)?("[^"\r\n]*")\s*(?=,|$)/g)].some(
+		(match) => match[1] === opaque
+	);
 }

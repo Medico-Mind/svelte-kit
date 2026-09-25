@@ -221,13 +221,13 @@ describe('adapter.adapt()', () => {
 				out: prefixedOut,
 				precompress: false,
 				envPrefix: 'MY_APP_',
-				runtimeConfig: { bodySizeLimit: 64 }
+				runtimeConfig: { bodySizeLimit: 64, compressOnDemand: true }
 			}).adapt(fakeBuilder());
 			// PORT must be ignored in favor of MY_APP_PORT; MY_APP_BODY_SIZE_LIMIT
 			// must be ignored in favor of runtimeConfig.bodySizeLimit
 			server = await spawnServer(
 				path.join(prefixedOut, 'index.js'),
-				{ PORT: '1', MY_APP_BODY_SIZE_LIMIT: '1024' },
+				{ PORT: '1', MY_APP_BODY_SIZE_LIMIT: '1024', MY_APP_COMPRESS_ON_DEMAND: 'false' },
 				'MY_APP_PORT'
 			);
 		}, 120_000);
@@ -257,9 +257,39 @@ describe('adapter.adapt()', () => {
 			expect(rejected.status).toBe(413);
 		});
 
+		it('lets baked compression override the prefixed environment variable', async () => {
+			const response = await rawRequest(`${server.baseUrl}/hello`, {
+				headers: { 'accept-encoding': 'gzip' }
+			});
+			expect(response.headers['content-encoding']).toBe('gzip');
+			expect(zlib.gunzipSync(response.body).toString()).toBe('ssr:/hello');
+		});
+
 		it('skips precompression when disabled', () => {
 			expect(existsSync(path.join(prefixedOut, 'client/large.txt.gz'))).toBe(false);
 		});
+	});
+
+	it('serves generated assets with a SvelteKit base path', async () => {
+		const baseOut = path.join(scratch, 'build-base');
+		const builder = fakeBuilder({ basePath: '/base' });
+		builder.generateManifest = () =>
+			`{ appDir: "_app", appPath: "base/_app", assets: new Set([]), mimeTypes: {}, _: {} }`;
+		builder.prerendered.paths = ['/base/prerendered'];
+		await adapter({ out: baseOut }).adapt(builder);
+		const server = await spawnServer(path.join(baseOut, 'index.js'));
+		try {
+			const asset = await rawRequest(`${server.baseUrl}/base/_app/immutable/chunk.js`);
+			expect(asset.status).toBe(200);
+			expect(asset.headers['cache-control']).toContain('immutable');
+			expect(asset.body.toString()).toBe(IMMUTABLE_JS);
+			const page = await rawRequest(`${server.baseUrl}/base/prerendered`);
+			expect(page.body.toString()).toBe(PRERENDERED_HTML);
+			const redirect = await rawRequest(`${server.baseUrl}/base/prerendered/?query=kept`);
+			expect(redirect.headers.location).toBe('/base/prerendered?query=kept');
+		} finally {
+			await server.stop();
+		}
 	});
 
 	describe('runtimeConfig validation', () => {

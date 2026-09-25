@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import type { Adapter, Builder } from '@sveltejs/kit';
 import { rolldown, type InputOptions } from 'rolldown';
 
+import { writeAssetManifest } from './asset-manifest.js';
 import {
 	compressDirectory,
 	resolvePrecompressOptions,
@@ -317,6 +318,9 @@ export default function adapter(options: AdapterOptions = {}): Adapter {
 				}
 			}
 
+			builder.log.minor('Generating asset manifest');
+			await writeAssetManifest(out);
+
 			builder.log.minor('Building server');
 			builder.writeServer(`${tmp}/server`);
 
@@ -330,6 +334,7 @@ export default function adapter(options: AdapterOptions = {}): Adapter {
 			const templates = templateDirectory();
 			const specifiers = {
 				SHIMS: './shims.js',
+				ASSETS: './asset-manifest.js',
 				SERVER: './server/index.js',
 				MANIFEST: './server/manifest.js',
 				ENV: './env.js',
@@ -380,7 +385,7 @@ export default function adapter(options: AdapterOptions = {}): Adapter {
 			builder.log.minor('Bundling server entry');
 			const tmpDir = path.resolve(tmp);
 			const crossModuleImport =
-				/^\.\/(handler|app|env|shims)\.js$|^\.\/server\/(index|manifest)\.js$/;
+				/^\.\/(handler|app|env|shims|asset-manifest)\.js$|^\.\/server\/(index|manifest)\.js$/;
 			for (const name of TEMPLATE_FILES) {
 				const templateBundle = await rolldown({
 					input: path.join(tmp, name),

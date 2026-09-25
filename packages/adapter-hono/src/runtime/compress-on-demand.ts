@@ -62,6 +62,19 @@ function createEncoder(encoding: CompressedEncoding, sizeHint: number | undefine
 	}
 }
 
+/** Streaming encoder shared with static serving, which selects validators before opening files. */
+export function compressBody(
+	body: ReadableStream<Uint8Array>,
+	encoding: CompressedEncoding,
+	size?: number
+): ReadableStream<Uint8Array> {
+	const source = Readable.fromWeb(body as NodeReadableStream<Uint8Array>);
+	const encoder = createEncoder(encoding, size);
+	source.on('error', (error) => encoder.destroy(error));
+	encoder.on('close', () => source.destroy());
+	return Readable.toWeb(source.pipe(encoder)) as unknown as ReadableStream<Uint8Array>;
+}
+
 function appendVary(headers: Headers): void {
 	const vary = headers.get('vary');
 	if (!vary) {
@@ -75,6 +88,11 @@ function appendVary(headers: Headers): void {
 	if (!listed.includes('accept-encoding') && !listed.includes('*')) {
 		headers.append('vary', 'accept-encoding');
 	}
+}
+
+function weakenEtag(headers: Headers): void {
+	const etag = headers.get('etag');
+	if (etag && !etag.startsWith('W/')) headers.set('etag', `W/${etag}`);
 }
 
 /**
@@ -94,12 +112,21 @@ export function compressOnDemand(): MiddlewareHandler {
 		await next();
 
 		const response = c.res;
-		if (!response.body || c.req.method === 'HEAD') return;
-
+		// node-server materializes its lightweight Response on body access, which
+		// can replace the Headers object. Read the body before retaining headers.
+		const body = response.body;
 		const { status, headers } = response;
-		if (status === 206 || status === 304) return;
+		if (status === 206 || c.req.header('range')) return;
 		if (headers.has('content-encoding')) return;
 		if (/(?:^|,)\s*no-transform\s*(?:$|[,;])/i.test(headers.get('cache-control') ?? '')) return;
+		// A dynamic 304 may omit its original content type. Keep cached compressed
+		// responses' validators weak even when SSR supplies a strong identity tag.
+		if (status === 304) {
+			appendVary(headers);
+			weakenEtag(headers);
+			return;
+		}
+		if (!body && c.req.method !== 'HEAD') return;
 		if (!isCompressibleContentType(headers.get('content-type'))) return;
 
 		const declaredLength = headers.get('content-length');
@@ -110,16 +137,20 @@ export function compressOnDemand(): MiddlewareHandler {
 		appendVary(headers);
 
 		const encoding = selectEncoding(c.req.header('accept-encoding'), COMPRESSED_ENCODINGS);
+		if (encoding === undefined) {
+			await body?.cancel();
+			c.res = new Response(null, { status: 406, headers: { vary: headers.get('vary')! } });
+			return;
+		}
 		if (encoding === 'identity') return;
 
-		const compressed = Readable.fromWeb(response.body as NodeReadableStream<Uint8Array>).pipe(
-			createEncoder(encoding, size)
-		);
-
 		c.res = new Response(
-			Readable.toWeb(compressed) as unknown as ReadableStream<Uint8Array>,
+			body && c.req.method !== 'HEAD' ? compressBody(body, encoding, size) : null,
 			response
 		);
+		// Dynamic bytes are not hashed ahead of time. Preserve only a weak validator
+		// for the semantically equivalent response, never the identity strong tag.
+		weakenEtag(c.res.headers);
 		c.res.headers.delete('content-length');
 		c.res.headers.set('content-encoding', encoding);
 	};

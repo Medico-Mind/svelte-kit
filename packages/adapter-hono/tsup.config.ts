@@ -40,6 +40,7 @@ export default defineConfig([
 		dts: false,
 		sourcemap: false,
 		external: [
+			'ASSETS',
 			'ENV',
 			'HANDLER',
 			'MANIFEST',

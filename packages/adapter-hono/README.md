@@ -10,7 +10,7 @@
 [SvelteKit](https://svelte.dev/docs/kit) adapter that builds a **standalone Node server powered by [Hono](https://hono.dev)** (`hono` + `@hono/node-server`) — a drop-in alternative to [`@sveltejs/adapter-node`](https://svelte.dev/docs/kit/adapter-node) with built-in **brotli, gzip and zstd precompression** served via `Accept-Encoding` negotiation.
 
 - Self-contained `build/` output: `node build` and you're serving.
-- Static assets → prerendered pages → SSR, in that order, with zero sync fs calls and no per-request buffering on the hot path (file existence is resolved from a manifest built once at boot).
+- Static assets → prerendered pages → SSR, in that order, with zero sync fs calls and no per-request buffering on the hot path (asset metadata is generated during adapt, after precompression).
 - `.gz` / `.br` / `.zst` sidecars generated at build time and negotiated per request with full q-value parsing. Compression runs on native Rust ([`@medicomind/rolldown-compression`](https://github.com/Medico-Mind/rolldown-compression)) — about **2× faster than `node:zlib`** on our benchmarks.
 - Composable: embed the generated Hono app inside your own server.
 
@@ -131,7 +131,17 @@ Values are validated when `svelte.config.js` is loaded — an unknown field or a
 
 ### Serving negotiation
 
-For static assets and prerendered pages the server parses `Accept-Encoding` with q-values and picks the best available sidecar. When q-values tie, preference is **`zstd` > `br` > `gzip` > identity**. Responses carry the correct `content-encoding`, the original `content-type` and `vary: accept-encoding`. Range requests are never served from compressed sidecars. When no sidecar matches, the identity file is streamed.
+For static assets and prerendered pages the server parses `Accept-Encoding` with q-values and picks the best available sidecar. When q-values tie, preference is **`zstd` > `br` > `gzip` > identity**. Responses carry the correct `content-encoding`, the original `content-type` and `vary: accept-encoding`. Range requests are never served from compressed sidecars. When no sidecar matches, the identity file is streamed (or compressed on demand when enabled). Explicit `identity` preferences and wildcard exclusions are respected; if no available representation is acceptable, the server returns 406.
+
+### Asset manifest and cache validation
+
+`adapt()` writes `asset-manifest.js` after copying and precompressing client/prerendered files. The module contains only metadata and paths relative to the output; production startup imports it without walking directories or checking file metadata. Static requests use a Map lookup and stream the selected file. HEAD and 304 responses do not open files.
+
+Each identity and precompressed file has its own strong SHA-256 ETag, calculated from its exact bytes during the build. ETags remain stable across copies, timestamp changes and identical builds. `If-None-Match` supports lists, weak comparison and `*`; `Last-Modified` is no longer emitted. On-demand static compression uses a weak validator derived from identity content and the encoding. Dynamic SSR validators are weakened when their bytes are transformed.
+
+Single byte ranges use identity content, including suffix and open-ended ranges. `If-Range` requires the current strong identity ETag; unsupported dates or stale/weak tags produce a full response. Malformed/multiple ranges retain the existing full-response behavior. Immutable cache-control and prerendered trailing-slash redirects are unchanged.
+
+Deploy the complete output directory, including `asset-manifest.js`, and rebuild after adding or changing static files or sidecars. Post-build file additions are not discovered; changing bytes without regenerating metadata would invalidate sizes and validators. Existing adapter options, defaults, runtime environment variables and embedding exports are unchanged. The adapter remains on the SvelteKit 2 API (`@sveltejs/kit: ^2.22.0`).
 
 ### Compress on demand
 
@@ -213,7 +223,7 @@ const response = await handler(new Request('http://localhost/'));
 
 ### Out of scope
 
-systemd socket activation (`LISTEN_FDS`), HTTP/2, TLS termination, clustering, and on-the-fly compression of dynamic SSR responses are intentionally not implemented (put a reverse proxy or CDN in front, or open an issue if you need them). `IDLE_TIMEOUT` here is a standalone idle shutdown rather than a socket-activation companion.
+systemd socket activation (`LISTEN_FDS`), HTTP/2, TLS termination and clustering are intentionally not implemented (put a reverse proxy or CDN in front, or open an issue if you need them). `IDLE_TIMEOUT` here is a standalone idle shutdown rather than a socket-activation companion.
 
 ## Troubleshooting
 
@@ -233,6 +243,7 @@ systemd socket activation (`LISTEN_FDS`), HTTP/2, TLS termination, clustering, a
 build/
 ├── index.js        # server entry: node build
 ├── handler.js      # exports { app, handler }
+├── asset-manifest.js # generated client/prerendered metadata and content hashes
 ├── app.js          # re-exports { app, handler } for embedding
 ├── env.js          # prefixed env reader
 ├── shims.js        # SvelteKit Node polyfills
@@ -240,6 +251,10 @@ build/
 ├── prerendered/    # prerendered pages (+ sidecars)
 └── server/         # bundled SvelteKit server + manifest
 ```
+
+## Performance validation
+
+See [the asset manifest performance report](docs/asset-manifest-performance.md) for startup, request throughput, memory measurements and reproduction commands.
 
 ## License
 

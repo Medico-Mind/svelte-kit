@@ -159,3 +159,41 @@ describe('isCompressibleContentType', () => {
 		expect(isCompressibleContentType('')).toBe(false);
 	});
 });
+
+it('weakens strong SSR validators after transforming the bytes', async () => {
+	const app = makeApp(() => html(BODY, { headers: { etag: '"identity"' } }));
+	const response = await app.request('/', { headers: { 'accept-encoding': 'gzip' } });
+	expect(response.headers.get('etag')).toBe('W/"identity"');
+	await response.arrayBuffer();
+});
+
+it('rejects fully unacceptable dynamic representations', async () => {
+	const response = await makeApp(() => html()).request('/', {
+		headers: { 'accept-encoding': '*;q=0' }
+	});
+	expect(response.status).toBe(406);
+	expect(await response.text()).toBe('');
+});
+
+it('returns corresponding representation headers for dynamic HEAD', async () => {
+	const app = makeApp(() =>
+		html(BODY, { headers: { etag: '"tag"', 'content-length': String(BODY.length) } })
+	);
+	const headers = { 'accept-encoding': 'br' };
+	const get = await app.request('/', { headers });
+	const head = await app.request('/', { headers, method: 'HEAD' });
+	expect([...head.headers]).toEqual([...get.headers]);
+	expect(await head.text()).toBe('');
+	await get.arrayBuffer();
+});
+
+it('does not promote a cached compressed validator to strong on a dynamic 304', async () => {
+	const response = await makeApp(
+		() => new Response(null, { status: 304, headers: { etag: '"tag"' } })
+	).request('/', {
+		headers: { 'accept-encoding': 'br', 'if-none-match': 'W/"tag"' }
+	});
+	expect(response.status).toBe(304);
+	expect(response.headers.get('etag')).toBe('W/"tag"');
+	expect(response.headers.get('vary')).toBe('accept-encoding');
+});

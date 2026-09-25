@@ -1,5 +1,14 @@
+import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import {
+	cpSync,
+	existsSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync
+} from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pathToFileURL } from 'node:url';
@@ -29,7 +38,14 @@ beforeAll(() => {
 
 describe('build output', () => {
 	it('contains client, prerendered and server entry files', () => {
-		for (const file of ['index.js', 'handler.js', 'app.js', 'env.js', 'shims.js']) {
+		for (const file of [
+			'index.js',
+			'handler.js',
+			'app.js',
+			'env.js',
+			'shims.js',
+			'asset-manifest.js'
+		]) {
 			expect(existsSync(path.join(buildDir, file)), file).toBe(true);
 		}
 		expect(existsSync(path.join(buildDir, 'client'))).toBe(true);
@@ -181,18 +197,22 @@ describe('emitted server (e2e)', () => {
 		}
 	}, 60_000);
 
-	it('finishes in-flight requests on SIGTERM and exits cleanly', async () => {
-		const dedicated = await spawnServer(path.join(buildDir, 'index.js'));
-		const inflight = rawRequest(`${dedicated.baseUrl}/slow`);
-		await new Promise((resolve) => setTimeout(resolve, 300));
+	it.each(['SIGTERM', 'SIGINT'] as const)(
+		'finishes in-flight requests on %s and exits cleanly',
+		async (signal) => {
+			const dedicated = await spawnServer(path.join(buildDir, 'index.js'));
+			const inflight = rawRequest(`${dedicated.baseUrl}/slow`);
+			await new Promise((resolve) => setTimeout(resolve, 300));
 
-		const exitCode = await dedicated.shutdown('SIGTERM');
-		const response = await inflight;
+			const exitCode = await dedicated.shutdown(signal);
+			const response = await inflight;
 
-		expect(response.status).toBe(200);
-		expect(response.body.toString()).toBe('slow-done');
-		expect(exitCode).toBe(0);
-	}, 60_000);
+			expect(response.status).toBe(200);
+			expect(response.body.toString()).toBe('slow-done');
+			expect(exitCode).toBe(0);
+		},
+		60_000
+	);
 });
 
 describe('embedding the built app', () => {
@@ -219,4 +239,58 @@ describe('embedding the built app', () => {
 		const viaHandler = await module.handler(new Request('http://localhost/about'));
 		expect(viaHandler.status).toBe(200);
 	});
+});
+
+it('runs a relocated standalone build without discovery or request-time metadata lookups', () => {
+	const moved = mkdtempSync(path.join(tmpdir(), 'adapter-standalone-'));
+	try {
+		cpSync(buildDir, moved, { recursive: true });
+		writeFileSync(path.join(moved, 'package.json'), '{"type":"module"}');
+		const script = `
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import fsp from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
+for (const name of ['stat', 'lstat', 'readdir', 'access', 'exists']) {
+	for (const suffix of ['', 'Sync']) {
+		if (name + suffix in fs) fs[name + suffix] = () => { throw new Error('forbidden metadata lookup: ' + name + suffix); };
+	}
+	if (name in fsp) fsp[name] = () => { throw new Error('forbidden metadata lookup: ' + name); };
+}
+let opens = 0;
+const readStream = fs.createReadStream;
+fs.createReadStream = (...args) => { opens++; return readStream(...args); };
+syncBuiltinESMExports();
+const { handler } = await import(${JSON.stringify(pathToFileURL(path.join(moved, 'handler.js')).href)});
+for (const encoding of ['', 'gzip', 'br', 'zstd']) {
+	const headers = { 'accept-encoding': encoding };
+	const get = await handler(new Request('http://localhost/large.txt', { headers }));
+	assert.equal(get.status, 200);
+	const beforeHead = opens;
+	const head = await handler(new Request('http://localhost/large.txt', { method: 'HEAD', headers }));
+	assert.equal(opens, beforeHead);
+	assert.deepEqual([...head.headers], [...get.headers]);
+	assert.equal(await head.text(), '');
+	await get.arrayBuffer();
+	const beforeCached = opens;
+	const cached = await handler(new Request('http://localhost/large.txt', { headers: { ...headers, 'if-none-match': get.headers.get('etag') } }));
+	assert.equal(cached.status, 304);
+	assert.equal(opens, beforeCached);
+}
+const range = await handler(new Request('http://localhost/large.txt', { headers: { range: 'bytes=0-9' } }));
+assert.equal(range.status, 206);
+assert.equal((await range.arrayBuffer()).byteLength, 10);
+for (const pathname of ['/', '/about', '/about.html', '/ip']) {
+	const response = await handler(new Request('http://localhost' + pathname, { headers: { 'x-client-ip': '127.0.0.1' } }));
+	assert.equal(response.status, 200);
+	await response.arrayBuffer();
+}
+`;
+		execFileSync(process.execPath, ['--input-type=module', '-e', script], {
+			cwd: moved,
+			env: { ...process.env, COMPRESS_ON_DEMAND: 'true', ADDRESS_HEADER: 'x-client-ip' }
+		});
+	} finally {
+		rmSync(moved, { recursive: true, force: true });
+	}
 });

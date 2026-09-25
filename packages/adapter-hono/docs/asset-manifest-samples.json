@@ -1,0 +1,1333 @@
+{
+	"environment": {
+		"cpu": "Apple M5 Pro",
+		"logicalCpus": 18,
+		"os": "Darwin 25.6.0",
+		"arch": "arm64",
+		"node": "26.5.1",
+		"svelteKit": "2.70.1",
+		"vite": "8.1.5",
+		"baselineCommit": "e11639eaf4e64b9a1fe0f6057a192a74c982a2a8"
+	},
+	"pairs": [
+		{
+			"before": {
+				"requests": {
+					"immutable JS": {
+						"requestsPerSecond": 9666.448909605524,
+						"p99": 8.22637500000019,
+						"errors": 0
+					},
+					"immutable JS (br)": {
+						"requestsPerSecond": 11726.747522263184,
+						"p99": 6.8049580000006245,
+						"errors": 0
+					},
+					"immutable JS (zstd)": {
+						"requestsPerSecond": 12285.011945449085,
+						"p99": 6.273791999999958,
+						"errors": 0
+					},
+					"HEAD immutable JS": {
+						"requestsPerSecond": 25205.7725482646,
+						"p99": 4.401458000000275,
+						"errors": 0
+					},
+					"304 If-None-Match": {
+						"requestsPerSecond": 24145.95264332996,
+						"p99": 5.084874999998647,
+						"errors": 0
+					},
+					"Range": {
+						"requestsPerSecond": 14156.32839577174,
+						"p99": 5.724959000001036,
+						"errors": 0
+					},
+					"SSR route": {
+						"requestsPerSecond": 10411.403213371776,
+						"p99": 7.792041000000609,
+						"errors": 0
+					},
+					"API route": {
+						"requestsPerSecond": 23288.542219531555,
+						"p99": 4.993875000000116,
+						"errors": 0
+					}
+				},
+				"startup": {
+					"100": {
+						"manifestBytes": 12280,
+						"samples": [
+							{
+								"ms": 16.413458,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							},
+							{
+								"ms": 17.897416000000003,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							},
+							{
+								"ms": 17.074333000000003,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							},
+							{
+								"ms": 17.508167000000004,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							},
+							{
+								"ms": 16.464458,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							},
+							{
+								"ms": 15.029458000000002,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							},
+							{
+								"ms": 14.961333,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							}
+						]
+					},
+					"1000": {
+						"manifestBytes": 113080,
+						"samples": [
+							{
+								"ms": 23.02525,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2880200
+							},
+							{
+								"ms": 22.003333,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2880200
+							},
+							{
+								"ms": 22.345,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2880200
+							},
+							{
+								"ms": 27.917707999999998,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2880088
+							},
+							{
+								"ms": 20.392791,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2880200
+							},
+							{
+								"ms": 24.009125,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2879848
+							},
+							{
+								"ms": 23.022083000000002,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2880200
+							}
+						]
+					},
+					"10000": {
+						"manifestBytes": 1130080,
+						"samples": [
+							{
+								"ms": 75.956084,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10059960
+							},
+							{
+								"ms": 89.815292,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10081456
+							},
+							{
+								"ms": 80.895375,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10075968
+							},
+							{
+								"ms": 78.13620800000001,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10075704
+							},
+							{
+								"ms": 79.073958,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10079024
+							},
+							{
+								"ms": 80.339458,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10075648
+							},
+							{
+								"ms": 77.994583,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10146040
+							}
+						]
+					}
+				}
+			},
+			"after": {
+				"requests": {
+					"immutable JS": {
+						"requestsPerSecond": 13973.772934936746,
+						"p99": 3.5803750000000036,
+						"errors": 0
+					},
+					"immutable JS (br)": {
+						"requestsPerSecond": 17419.59214352539,
+						"p99": 3.235791999999492,
+						"errors": 0
+					},
+					"immutable JS (zstd)": {
+						"requestsPerSecond": 17371.229897783236,
+						"p99": 3.5707500000007713,
+						"errors": 0
+					},
+					"HEAD immutable JS": {
+						"requestsPerSecond": 38423.359262864105,
+						"p99": 1.3510419999984151,
+						"errors": 0
+					},
+					"304 If-None-Match": {
+						"requestsPerSecond": 36815.94672204996,
+						"p99": 1.4049169999998412,
+						"errors": 0
+					},
+					"Range": {
+						"requestsPerSecond": 16826.631003366918,
+						"p99": 2.9067920000015874,
+						"errors": 0
+					},
+					"SSR route": {
+						"requestsPerSecond": 15157.584206759106,
+						"p99": 3.840749999999389,
+						"errors": 0
+					},
+					"API route": {
+						"requestsPerSecond": 32977.40489997463,
+						"p99": 2.1497090000011667,
+						"errors": 0
+					}
+				},
+				"startup": {
+					"100": {
+						"manifestBytes": 12280,
+						"samples": [
+							{
+								"ms": 12.404250000000001,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130232
+							},
+							{
+								"ms": 12.406083000000002,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							},
+							{
+								"ms": 11.008916,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							},
+							{
+								"ms": 10.660125,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							},
+							{
+								"ms": 10.940417,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							},
+							{
+								"ms": 10.909958,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							},
+							{
+								"ms": 11.716125000000002,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							}
+						]
+					},
+					"1000": {
+						"manifestBytes": 113080,
+						"samples": [
+							{
+								"ms": 15.596375000000002,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830184
+							},
+							{
+								"ms": 15.975125000000002,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830584
+							},
+							{
+								"ms": 16.350458,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830296
+							},
+							{
+								"ms": 16.023332999999997,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830296
+							},
+							{
+								"ms": 13.886083000000003,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830184
+							},
+							{
+								"ms": 13.815208000000002,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830184
+							},
+							{
+								"ms": 16.700750000000003,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830184
+							}
+						]
+					},
+					"10000": {
+						"manifestBytes": 1130080,
+						"samples": [
+							{
+								"ms": 33.47987499999999,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8625848
+							},
+							{
+								"ms": 33.223625,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8625864
+							},
+							{
+								"ms": 33.273709,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8625528
+							},
+							{
+								"ms": 32.878458,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8625784
+							},
+							{
+								"ms": 32.62245899999999,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8600176
+							},
+							{
+								"ms": 33.015292,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8625848
+							},
+							{
+								"ms": 34.373625,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8626624
+							}
+						]
+					}
+				}
+			}
+		},
+		{
+			"before": {
+				"requests": {
+					"immutable JS": {
+						"requestsPerSecond": 18243.20747521024,
+						"p99": 2.725082999999813,
+						"errors": 0
+					},
+					"immutable JS (br)": {
+						"requestsPerSecond": 20720.100716742163,
+						"p99": 2.4761670000007143,
+						"errors": 0
+					},
+					"immutable JS (zstd)": {
+						"requestsPerSecond": 22069.09760008458,
+						"p99": 2.1492920000000595,
+						"errors": 0
+					},
+					"HEAD immutable JS": {
+						"requestsPerSecond": 39518.9105477989,
+						"p99": 1.243583999999828,
+						"errors": 0
+					},
+					"304 If-None-Match": {
+						"requestsPerSecond": 40064.885522899734,
+						"p99": 1.2027499999985594,
+						"errors": 0
+					},
+					"Range": {
+						"requestsPerSecond": 24421.214207334044,
+						"p99": 1.7971250000009604,
+						"errors": 0
+					},
+					"SSR route": {
+						"requestsPerSecond": 16950.549582135976,
+						"p99": 3.0514170000024023,
+						"errors": 0
+					},
+					"API route": {
+						"requestsPerSecond": 37511.32920868435,
+						"p99": 1.7192499999982829,
+						"errors": 0
+					}
+				},
+				"startup": {
+					"100": {
+						"manifestBytes": 12280,
+						"samples": [
+							{
+								"ms": 11.612874999999999,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							},
+							{
+								"ms": 11.279291999999998,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							},
+							{
+								"ms": 11.036207999999998,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							},
+							{
+								"ms": 10.965792,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							},
+							{
+								"ms": 10.973667000000003,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							},
+							{
+								"ms": 11.160334000000002,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							},
+							{
+								"ms": 11.33275,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							}
+						]
+					},
+					"1000": {
+						"manifestBytes": 113080,
+						"samples": [
+							{
+								"ms": 15.802709000000004,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2879272
+							},
+							{
+								"ms": 15.572834000000002,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2879848
+							},
+							{
+								"ms": 15.5125,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2879512
+							},
+							{
+								"ms": 15.825082999999996,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2879272
+							},
+							{
+								"ms": 15.678999999999998,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2879848
+							},
+							{
+								"ms": 15.984708999999999,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2880200
+							},
+							{
+								"ms": 16.050166,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2879088
+							}
+						]
+					},
+					"10000": {
+						"manifestBytes": 1130080,
+						"samples": [
+							{
+								"ms": 51.966125000000005,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10059976
+							},
+							{
+								"ms": 51.41625,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10065568
+							},
+							{
+								"ms": 58.495542,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10077240
+							},
+							{
+								"ms": 54.11450000000001,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10076984
+							},
+							{
+								"ms": 53.80954200000001,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10059976
+							},
+							{
+								"ms": 54.35158299999999,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10077048
+							},
+							{
+								"ms": 52.424375000000005,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10077016
+							}
+						]
+					}
+				}
+			},
+			"after": {
+				"requests": {
+					"immutable JS": {
+						"requestsPerSecond": 18750.4994078535,
+						"p99": 2.6817909999999756,
+						"errors": 0
+					},
+					"immutable JS (br)": {
+						"requestsPerSecond": 21962.557626698755,
+						"p99": 2.173833999999715,
+						"errors": 0
+					},
+					"immutable JS (zstd)": {
+						"requestsPerSecond": 22161.482416310697,
+						"p99": 2.1350409999995463,
+						"errors": 0
+					},
+					"HEAD immutable JS": {
+						"requestsPerSecond": 40534.42954658867,
+						"p99": 1.1842500000002474,
+						"errors": 0
+					},
+					"304 If-None-Match": {
+						"requestsPerSecond": 39558.39485775864,
+						"p99": 1.2472500000003492,
+						"errors": 0
+					},
+					"Range": {
+						"requestsPerSecond": 24742.55767995655,
+						"p99": 1.8787089999987074,
+						"errors": 0
+					},
+					"SSR route": {
+						"requestsPerSecond": 16527.3466289288,
+						"p99": 3.3320829999975103,
+						"errors": 0
+					},
+					"API route": {
+						"requestsPerSecond": 37381.56503099238,
+						"p99": 1.7514999999984866,
+						"errors": 0
+					}
+				},
+				"startup": {
+					"100": {
+						"manifestBytes": 12280,
+						"samples": [
+							{
+								"ms": 11.082540999999999,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							},
+							{
+								"ms": 10.74325,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							},
+							{
+								"ms": 10.650540999999997,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							},
+							{
+								"ms": 10.146958000000001,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							},
+							{
+								"ms": 10.183374999999998,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							},
+							{
+								"ms": 10.124292,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							},
+							{
+								"ms": 10.312208000000002,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							}
+						]
+					},
+					"1000": {
+						"manifestBytes": 113080,
+						"samples": [
+							{
+								"ms": 13.399459,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830296
+							},
+							{
+								"ms": 12.537958,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830344
+							},
+							{
+								"ms": 12.55125,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2831120
+							},
+							{
+								"ms": 12.6875,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830584
+							},
+							{
+								"ms": 13.608917000000002,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830184
+							},
+							{
+								"ms": 12.8205,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830184
+							},
+							{
+								"ms": 13.069624999999998,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830296
+							}
+						]
+					},
+					"10000": {
+						"manifestBytes": 1130080,
+						"samples": [
+							{
+								"ms": 35.142583,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8628400
+							},
+							{
+								"ms": 35.439375,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8625784
+							},
+							{
+								"ms": 34.298625,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8625848
+							},
+							{
+								"ms": 33.685708000000005,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8602952
+							},
+							{
+								"ms": 33.109792,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8627080
+							},
+							{
+								"ms": 33.079792,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8626816
+							},
+							{
+								"ms": 33.900375,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8625528
+							}
+						]
+					}
+				}
+			}
+		},
+		{
+			"before": {
+				"requests": {
+					"immutable JS": {
+						"requestsPerSecond": 18188.92159055369,
+						"p99": 2.778833000000077,
+						"errors": 0
+					},
+					"immutable JS (br)": {
+						"requestsPerSecond": 21694.06128909671,
+						"p99": 2.1056250000001455,
+						"errors": 0
+					},
+					"immutable JS (zstd)": {
+						"requestsPerSecond": 21920.815921831098,
+						"p99": 2.0886669999999867,
+						"errors": 0
+					},
+					"HEAD immutable JS": {
+						"requestsPerSecond": 40773.90152995458,
+						"p99": 1.1714169999995647,
+						"errors": 0
+					},
+					"304 If-None-Match": {
+						"requestsPerSecond": 40620.91938685324,
+						"p99": 1.1778750000012224,
+						"errors": 0
+					},
+					"Range": {
+						"requestsPerSecond": 25179.18518585039,
+						"p99": 1.6685830000023998,
+						"errors": 0
+					},
+					"SSR route": {
+						"requestsPerSecond": 17043.317207652653,
+						"p99": 3.0069170000024315,
+						"errors": 0
+					},
+					"API route": {
+						"requestsPerSecond": 37400.46712115574,
+						"p99": 1.7661249999982829,
+						"errors": 0
+					}
+				},
+				"startup": {
+					"100": {
+						"manifestBytes": 12280,
+						"samples": [
+							{
+								"ms": 11.260917,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							},
+							{
+								"ms": 10.968290999999997,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							},
+							{
+								"ms": 11.2955,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							},
+							{
+								"ms": 11.253250000000001,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							},
+							{
+								"ms": 11.32575,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							},
+							{
+								"ms": 11.547583,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							},
+							{
+								"ms": 11.328000000000003,
+								"stats": 104,
+								"reads": 4,
+								"heapBytes": 2132328
+							}
+						]
+					},
+					"1000": {
+						"manifestBytes": 113080,
+						"samples": [
+							{
+								"ms": 15.876625000000004,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2880200
+							},
+							{
+								"ms": 15.477625000000003,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2880200
+							},
+							{
+								"ms": 15.737875,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2879848
+							},
+							{
+								"ms": 15.714291999999997,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2880200
+							},
+							{
+								"ms": 15.641791999999999,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2880200
+							},
+							{
+								"ms": 15.621959,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2879272
+							},
+							{
+								"ms": 15.590208,
+								"stats": 1004,
+								"reads": 4,
+								"heapBytes": 2879272
+							}
+						]
+					},
+					"10000": {
+						"manifestBytes": 1130080,
+						"samples": [
+							{
+								"ms": 51.630791,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10059960
+							},
+							{
+								"ms": 49.98204200000001,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10077112
+							},
+							{
+								"ms": 51.11520800000001,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10077016
+							},
+							{
+								"ms": 51.390249999999995,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10059960
+							},
+							{
+								"ms": 50.897375,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10077096
+							},
+							{
+								"ms": 51.03441600000001,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10059912
+							},
+							{
+								"ms": 50.458375,
+								"stats": 10004,
+								"reads": 4,
+								"heapBytes": 10077032
+							}
+						]
+					}
+				}
+			},
+			"after": {
+				"requests": {
+					"immutable JS": {
+						"requestsPerSecond": 18653.530474551088,
+						"p99": 2.707084000000009,
+						"errors": 0
+					},
+					"immutable JS (br)": {
+						"requestsPerSecond": 21752.247438466162,
+						"p99": 2.372082999999293,
+						"errors": 0
+					},
+					"immutable JS (zstd)": {
+						"requestsPerSecond": 21193.456905219195,
+						"p99": 2.409625000000233,
+						"errors": 0
+					},
+					"HEAD immutable JS": {
+						"requestsPerSecond": 40443.39187085895,
+						"p99": 1.1872910000001866,
+						"errors": 0
+					},
+					"304 If-None-Match": {
+						"requestsPerSecond": 40334.26795335659,
+						"p99": 1.1955419999994774,
+						"errors": 0
+					},
+					"Range": {
+						"requestsPerSecond": 25154.43108565637,
+						"p99": 1.6902499999996508,
+						"errors": 0
+					},
+					"SSR route": {
+						"requestsPerSecond": 16764.28232089391,
+						"p99": 3.266124999998283,
+						"errors": 0
+					},
+					"API route": {
+						"requestsPerSecond": 37852.01863622146,
+						"p99": 1.7244160000009288,
+						"errors": 0
+					}
+				},
+				"startup": {
+					"100": {
+						"manifestBytes": 12280,
+						"samples": [
+							{
+								"ms": 10.291917000000002,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							},
+							{
+								"ms": 10.374458,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							},
+							{
+								"ms": 10.021249999999998,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							},
+							{
+								"ms": 10.171375000000001,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							},
+							{
+								"ms": 9.973458,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							},
+							{
+								"ms": 10.120750000000001,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130232
+							},
+							{
+								"ms": 10.200416999999998,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2130208
+							}
+						]
+					},
+					"1000": {
+						"manifestBytes": 113080,
+						"samples": [
+							{
+								"ms": 12.690290999999998,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830344
+							},
+							{
+								"ms": 12.595333,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830184
+							},
+							{
+								"ms": 12.621333,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830344
+							},
+							{
+								"ms": 12.948540999999999,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830184
+							},
+							{
+								"ms": 12.789708999999998,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830184
+							},
+							{
+								"ms": 12.652290999999998,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830576
+							},
+							{
+								"ms": 12.498791,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 2830184
+							}
+						]
+					},
+					"10000": {
+						"manifestBytes": 1130080,
+						"samples": [
+							{
+								"ms": 33.142792,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8625848
+							},
+							{
+								"ms": 32.9025,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8629560
+							},
+							{
+								"ms": 34.046458,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8629912
+							},
+							{
+								"ms": 32.670709,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8625784
+							},
+							{
+								"ms": 32.704042,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8625784
+							},
+							{
+								"ms": 33.067583,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8626624
+							},
+							{
+								"ms": 32.312124999999995,
+								"stats": 0,
+								"reads": 0,
+								"heapBytes": 8595536
+							}
+						]
+					}
+				}
+			}
+		}
+	],
+	"fixture": {
+		"bytes": 29523,
+		"sha256": "34f2cea9d7dc76278f53f85328d00c4408d8b712fd9804bcea5bfc7004158b3e"
+	},
+	"finalSmoke": {
+		"startup": {
+			"100": {
+				"manifestBytes": 12280,
+				"samples": [
+					{
+						"ms": 10.046750000000001,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 2130600
+					},
+					{
+						"ms": 9.576875000000001,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 2130600
+					},
+					{
+						"ms": 9.775625,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 2130600
+					},
+					{
+						"ms": 9.679625000000001,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 2130600
+					},
+					{
+						"ms": 9.569999999999999,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 2130600
+					},
+					{
+						"ms": 10.175,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 2130600
+					},
+					{
+						"ms": 9.555875,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 2130600
+					}
+				]
+			},
+			"1000": {
+				"manifestBytes": 113080,
+				"samples": [
+					{
+						"ms": 12.072792000000003,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 2830736
+					},
+					{
+						"ms": 12.152166000000001,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 2830576
+					},
+					{
+						"ms": 12.020000000000001,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 2830576
+					},
+					{
+						"ms": 12.280791999999998,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 2830576
+					},
+					{
+						"ms": 12.662541,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 2831328
+					},
+					{
+						"ms": 12.142166000000001,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 2831352
+					},
+					{
+						"ms": 12.102541,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 2830736
+					}
+				]
+			},
+			"10000": {
+				"manifestBytes": 1130080,
+				"samples": [
+					{
+						"ms": 31.499416999999998,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 8600824
+					},
+					{
+						"ms": 31.440540999999996,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 8626240
+					},
+					{
+						"ms": 31.471542,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 8627208
+					},
+					{
+						"ms": 31.812416000000002,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 8626240
+					},
+					{
+						"ms": 31.825875000000003,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 8627208
+					},
+					{
+						"ms": 31.913082999999997,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 8626272
+					},
+					{
+						"ms": 31.528666,
+						"stats": 0,
+						"reads": 0,
+						"heapBytes": 8625904
+					}
+				]
+			}
+		},
+		"requests": {
+			"immutable JS": {
+				"requestsPerSecond": 19928.232867080696,
+				"p99": 2.5107499999999163,
+				"errors": 0
+			},
+			"immutable JS (br)": {
+				"requestsPerSecond": 22856.236405833915,
+				"p99": 2.3243750000001455,
+				"errors": 0
+			},
+			"immutable JS (zstd)": {
+				"requestsPerSecond": 23083.645012058005,
+				"p99": 2.328749999998763,
+				"errors": 0
+			},
+			"HEAD immutable JS": {
+				"requestsPerSecond": 41164.60447290453,
+				"p99": 1.1340000000000146,
+				"errors": 0
+			},
+			"304 If-None-Match": {
+				"requestsPerSecond": 41003.023473604815,
+				"p99": 1.1363340000007156,
+				"errors": 0
+			},
+			"Range": {
+				"requestsPerSecond": 26990.492364359638,
+				"p99": 1.1717500000013388,
+				"errors": 0
+			},
+			"SSR route": {
+				"requestsPerSecond": 17524.760446225497,
+				"p99": 2.893208000001323,
+				"errors": 0
+			},
+			"API route": {
+				"requestsPerSecond": 38343.693930021946,
+				"p99": 1.615125000000262,
+				"errors": 0
+			}
+		}
+	}
+}

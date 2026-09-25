@@ -1,3 +1,5 @@
+import { createAssetManifest } from '../../src/asset-manifest.js';
+import type { AssetManifest } from '../../src/runtime/assets.js';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -11,6 +13,8 @@ const PAGE = `<html><body>prerendered page ${'x'.repeat(64)}</body></html>`;
 const ASSET = 'static asset content '.repeat(60);
 
 let clientRoot: string;
+let clientManifest: AssetManifest;
+let prerenderedManifest: AssetManifest;
 let prerenderedRoot: string;
 
 /** SSR stub that reports how it was called. */
@@ -28,16 +32,16 @@ const ssr: BuildAppOptions['ssr'] = async (request, context) => {
 function makeApp(overrides: Partial<BuildAppOptions> = {}) {
 	return buildHonoApp({
 		ssr,
-		client: { root: clientRoot, immutablePathPrefix: '/_app/immutable/' },
+		client: { manifest: clientManifest, immutablePathPrefix: '/_app/immutable/' },
 		prerendered: {
-			root: prerenderedRoot,
+			manifest: prerenderedManifest,
 			prerenderedPaths: new Set(['/about', '/docs/'])
 		},
 		...overrides
 	});
 }
 
-beforeAll(() => {
+beforeAll(async () => {
 	clientRoot = mkdtempSync(path.join(tmpdir(), 'adapter-hono-client-'));
 	prerenderedRoot = mkdtempSync(path.join(tmpdir(), 'adapter-hono-prerendered-'));
 
@@ -52,6 +56,8 @@ beforeAll(() => {
 	mkdirSync(path.join(prerenderedRoot, 'docs'), { recursive: true });
 	writeFileSync(path.join(prerenderedRoot, 'docs/index.html'), PAGE);
 	writeFileSync(path.join(prerenderedRoot, 'data.json'), '{"prerendered":true}');
+	clientManifest = await createAssetManifest(clientRoot);
+	prerenderedManifest = await createAssetManifest(prerenderedRoot);
 });
 
 afterAll(() => {
@@ -255,4 +261,41 @@ describe('handler composition', () => {
 		expect((await root.request('/about')).status).toBe(200);
 		expect(await (await root.request('/ssr/url')).text()).toBe('http://localhost/ssr/url');
 	});
+});
+
+it('validates on-demand static representations before opening or compressing the body', async () => {
+	const app = makeApp({ compressOnDemand: true });
+	const requestHeaders = { 'accept-encoding': 'br' };
+	const get = await app.request('/asset.txt', { headers: requestHeaders });
+	const head = await app.request('/asset.txt', { method: 'HEAD', headers: requestHeaders });
+	expect([...head.headers]).toEqual([...get.headers]);
+	expect(await head.text()).toBe('');
+	const tag = get.headers.get('etag')!;
+	expect(tag).toMatch(/^W\/.+-runtime-br"$/);
+	expect(zlib.brotliDecompressSync(Buffer.from(await get.arrayBuffer())).toString()).toBe(ASSET);
+	const cached = await app.request('/asset.txt', {
+		headers: { ...requestHeaders, 'if-none-match': tag }
+	});
+	expect(cached.status).toBe(304);
+	expect(await cached.text()).toBe('');
+	const identityTag = (await app.request('/asset.txt', { method: 'HEAD' })).headers.get('etag')!;
+	const changedRepresentation = await app.request('/asset.txt', {
+		headers: { ...requestHeaders, 'if-none-match': identityTag }
+	});
+	expect(changedRepresentation.status).toBe(200);
+	await changedRepresentation.arrayBuffer();
+	const required = await app.request('/asset.txt', {
+		headers: { 'accept-encoding': 'br, identity;q=0' }
+	});
+	expect(required.status).toBe(200);
+	await required.arrayBuffer();
+});
+
+it('does not transform malformed-range fallbacks when runtime compression is enabled', async () => {
+	const response = await makeApp({ compressOnDemand: true }).request('/asset.txt', {
+		headers: { range: 'bytes=1-2,4-5', 'accept-encoding': 'br' }
+	});
+	expect(response.status).toBe(200);
+	expect(response.headers.get('content-encoding')).toBeNull();
+	expect(await response.text()).toBe(ASSET);
 });

@@ -39,7 +39,7 @@ export function parseEncodingHeader(header: string): Map<string, number> {
 		for (const param of params) {
 			const [key, value] = param.split('=').map((s) => s.trim().toLowerCase());
 			if (key !== 'q') continue;
-			const parsed = Number.parseFloat(value ?? '');
+			const parsed = value?.trim() ? Number(value) : NaN;
 			q = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), 1) : 0;
 		}
 
@@ -57,18 +57,17 @@ export function parseEncodingHeader(header: string): Map<string, number> {
  * - Unknown encodings are ignored.
  * - `*` applies to any available encoding not mentioned explicitly.
  * - When q-values tie, preference is `zstd` > `br` > `gzip`.
- * - If no listed encoding is acceptable, `identity` is served — including the
- *   pathological `identity;q=0` case, where serving the file anyway is more
- *   useful than a 406.
+ * - Explicit identity preferences participate in ranking. Otherwise identity
+ *   is the fallback, unless excluded by identity;q=0 or *;q=0.
+ * - Returns undefined if no representation is acceptable (406).
  */
 export function selectEncoding(
 	header: string | null | undefined,
 	available: Iterable<CompressedEncoding>
-): ContentEncoding {
+): ContentEncoding | undefined {
 	if (!header) return 'identity';
 
 	const availableSet = new Set(available);
-	if (availableSet.size === 0) return 'identity';
 
 	const table = parseEncodingHeader(header);
 	const wildcard = table.get('*');
@@ -86,5 +85,8 @@ export function selectEncoding(
 		}
 	}
 
-	return bestQ > 0 ? best : 'identity';
+	const identityQ = table.get('identity');
+	if (identityQ !== undefined && identityQ > bestQ) return 'identity';
+	if (bestQ > 0) return best;
+	return (identityQ ?? (wildcard === 0 ? 0 : 1)) > 0 ? 'identity' : undefined;
 }

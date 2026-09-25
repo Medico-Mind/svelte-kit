@@ -1,3 +1,4 @@
+import { createAssetManifest } from '../../src/asset-manifest.js';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -5,15 +6,10 @@ import zlib from 'node:zlib';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import {
-	createAssetManifest,
-	parseRangeHeader,
-	serveAsset,
-	type AssetManifest
-} from '../../src/runtime/assets.js';
+import { parseRangeHeader, serveAsset, type AssetManifest } from '../../src/runtime/assets.js';
 
 const CONTENT = 'The quick brown fox jumps over the lazy dog. '.repeat(10);
-const FAKE_ZSTD = Buffer.from('not-really-zstd-but-served-verbatim');
+const ZSTD = zlib.zstdCompressSync(CONTENT);
 
 let root: string;
 let manifest: AssetManifest;
@@ -21,18 +17,18 @@ let manifest: AssetManifest;
 const get = (pathname: string, headers: Record<string, string> = {}, method = 'GET') =>
 	new Request(`http://localhost${pathname}`, { method, headers });
 
-beforeAll(() => {
+beforeAll(async () => {
 	root = mkdtempSync(path.join(tmpdir(), 'adapter-hono-assets-'));
 	mkdirSync(path.join(root, 'nested'), { recursive: true });
 
 	writeFileSync(path.join(root, 'hello.txt'), CONTENT);
 	writeFileSync(path.join(root, 'hello.txt.gz'), zlib.gzipSync(CONTENT));
 	writeFileSync(path.join(root, 'hello.txt.br'), zlib.brotliCompressSync(CONTENT));
-	writeFileSync(path.join(root, 'hello.txt.zst'), FAKE_ZSTD);
+	writeFileSync(path.join(root, 'hello.txt.zst'), ZSTD);
 	writeFileSync(path.join(root, 'plain.css'), 'body { color: red }');
 	writeFileSync(path.join(root, 'nested/data.json'), '{"nested":true}');
 
-	manifest = createAssetManifest(root);
+	manifest = await createAssetManifest(root);
 });
 
 afterAll(() => {
@@ -88,7 +84,9 @@ describe('serveAsset — negotiation', () => {
 			manifest.get('/hello.txt')!
 		);
 		expect(response.headers.get('content-encoding')).toBe('zstd');
-		expect(Buffer.from(await response.arrayBuffer())).toEqual(FAKE_ZSTD);
+		const bytes = Buffer.from(await response.arrayBuffer());
+		expect(bytes).toEqual(ZSTD);
+		expect(zlib.zstdDecompressSync(bytes).toString()).toBe(CONTENT);
 	});
 
 	it('sets vary even when identity is chosen for an asset with sidecars', () => {
@@ -113,7 +111,7 @@ describe('serveAsset — conditional requests', () => {
 			manifest.get('/hello.txt')!
 		);
 		const etag = first.headers.get('etag')!;
-		expect(etag).toMatch(/^W\/".+-gzip"$/);
+		expect(etag).toBe(manifest.get('/hello.txt.gz')!.etag);
 
 		const second = serveAsset(
 			get('/hello.txt', { 'accept-encoding': 'gzip', 'if-none-match': etag }),
@@ -130,9 +128,9 @@ describe('serveAsset — conditional requests', () => {
 		expect(identity.status).toBe(200);
 	});
 
-	it('sends last-modified', () => {
+	it('uses ETag without last-modified', () => {
 		const response = serveAsset(get('/hello.txt'), manifest.get('/hello.txt')!);
-		expect(response.headers.get('last-modified')).toBeTruthy();
+		expect(response.headers.get('last-modified')).toBeNull();
 	});
 });
 
@@ -215,4 +213,64 @@ describe('parseRangeHeader', () => {
 		expect(parseRangeHeader('bytes=-', 100)).toBeUndefined();
 		expect(parseRangeHeader('items=0-5', 100)).toBeUndefined();
 	});
+});
+
+describe('representation validators and headers', () => {
+	it.each(['gzip', 'br', 'zstd'] as const)(
+		'serves and validates %s with GET/HEAD parity',
+		async (encoding) => {
+			const entry = manifest.get('/hello.txt')!;
+			const response = serveAsset(get('/hello.txt', { 'accept-encoding': encoding }), entry);
+			const head = serveAsset(get('/hello.txt', { 'accept-encoding': encoding }, 'HEAD'), entry);
+			expect([...head.headers]).toEqual([...response.headers]);
+			expect(head.body).toBeNull();
+			const bytes = Buffer.from(await response.arrayBuffer());
+			expect(Number(head.headers.get('content-length'))).toBe(bytes.length);
+			if (encoding === 'br') expect(zlib.brotliDecompressSync(bytes).toString()).toBe(CONTENT);
+			const tag = head.headers.get('etag')!;
+			expect(tag).not.toBe(entry.etag);
+			for (const condition of ['*', tag, `W/${tag}`, `"other", W/${tag}, "last"`]) {
+				const cached = serveAsset(
+					get('/hello.txt', { 'accept-encoding': encoding, 'if-none-match': condition }),
+					entry
+				);
+				expect(cached.status).toBe(304);
+				expect(cached.body).toBeNull();
+				expect(cached.headers.get('vary')).toBe('accept-encoding');
+				expect(cached.headers.get('etag')).toBe(tag);
+			}
+		}
+	);
+
+	it.each(['identity;q=0', '*;q=0', 'gzip;q=0, br;q=0, zstd;q=0, identity;q=0'])(
+		'rejects unacceptable representations: %s',
+		(header) => {
+			expect(
+				serveAsset(get('/hello.txt', { 'accept-encoding': header }), manifest.get('/hello.txt')!)
+					.status
+			).toBe(406);
+		}
+	);
+
+	it('supports If-Range with a strong tag and ignores obsolete/weak validators', async () => {
+		const entry = manifest.get('/hello.txt')!;
+		for (const tag of [entry.etag, `W/${entry.etag}`, '"old"', 'Wed, 21 Oct 2015 07:28:00 GMT']) {
+			const response = serveAsset(get('/hello.txt', { range: 'bytes=5-', 'if-range': tag }), entry);
+			expect(response.status).toBe(tag === entry.etag ? 206 : 200);
+			expect(await response.text()).toBe(tag === entry.etag ? CONTENT.slice(5) : CONTENT);
+		}
+	});
+});
+
+it('honors no-transform for static on-demand compression', async () => {
+	const file = path.join(root, 'large-no-transform.txt');
+	const content = CONTENT.repeat(10);
+	writeFileSync(file, content);
+	const entry = (await createAssetManifest(root)).get('/large-no-transform.txt')!;
+	const response = serveAsset(get('/large-no-transform.txt', { 'accept-encoding': 'br' }), entry, {
+		compressOnDemand: true,
+		cacheControl: 'public, no-transform'
+	});
+	expect(response.headers.get('content-encoding')).toBeNull();
+	expect(await response.text()).toBe(content);
 });

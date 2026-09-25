@@ -39,3 +39,9 @@ declare const ENV_PREFIX: string;
  * mapped onto environment variable names with stringified values.
  */
 declare const ENV_OVERRIDES: Record<string, string>;
+
+declare module 'ASSETS' {
+	import type { AssetManifest } from '../runtime/assets.js';
+	export const client: AssetManifest;
+	export const prerendered: AssetManifest;
+}
