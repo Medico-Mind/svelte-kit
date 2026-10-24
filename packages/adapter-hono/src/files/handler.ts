@@ -1,5 +1,3 @@
-import 'SHIMS';
-
 import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -7,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 import { client, prerendered as prerenderedAssets } from 'ASSETS';
 import { env } from 'ENV';
-import { manifest, prerendered } from 'MANIFEST';
-import { Server } from 'SERVER';
+import { appPath, prerendered } from 'MANIFEST';
+import { server } from 'SERVER';
 
 import { buildHonoApp } from '../runtime/app.js';
 import { parseBodySizeLimit, parseBooleanEnv } from '../runtime/env-core.js';
@@ -16,9 +14,8 @@ import { parseBodySizeLimit, parseBooleanEnv } from '../runtime/env-core.js';
 /** Root of the emitted build output (this file's directory). */
 const dir = path.dirname(fileURLToPath(import.meta.url));
 
-const server = new Server(manifest);
 await server.init({
-	env: process.env as Record<string, string>,
+	env: process.env,
 	read: (file) =>
 		Readable.toWeb(createReadStream(path.join(dir, 'server', file))) as ReadableStream<Uint8Array>
 });
@@ -39,7 +36,7 @@ if (!Number.isInteger(xffDepth) || xffDepth < 1) {
  * Mount it inside your own Hono server via `app.route('/', app)`.
  */
 export const app = buildHonoApp({
-	client: { manifest: client, immutablePathPrefix: `/${manifest.appPath}/immutable/` },
+	client: { manifest: client, immutablePathPrefix: `/${appPath}/immutable/` },
 	prerendered: { manifest: prerenderedAssets, prerenderedPaths: prerendered },
 	ssr: (request, context) => server.respond(request, context),
 	compressOnDemand: parseBooleanEnv(env('COMPRESS_ON_DEMAND', 'false')),

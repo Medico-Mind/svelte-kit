@@ -38,14 +38,7 @@ beforeAll(() => {
 
 describe('build output', () => {
 	it('contains client, prerendered and server entry files', () => {
-		for (const file of [
-			'index.js',
-			'handler.js',
-			'app.js',
-			'env.js',
-			'shims.js',
-			'asset-manifest.js'
-		]) {
+		for (const file of ['index.js', 'handler.js', 'app.js', 'env.js', 'asset-manifest.js']) {
 			expect(existsSync(path.join(buildDir, file)), file).toBe(true);
 		}
 		expect(existsSync(path.join(buildDir, 'client'))).toBe(true);
@@ -143,8 +136,12 @@ describe('emitted server (e2e)', () => {
 	});
 
 	it('enforces the default BODY_SIZE_LIMIT (512K)', async () => {
+		// a non-form content type: SvelteKit 3 treats body-carrying requests
+		// without one as form submissions and rejects them cross-origin (CSRF)
+		const headers = { 'content-type': 'application/octet-stream' };
 		const allowed = await rawRequest(`${server.baseUrl}/echo`, {
 			method: 'POST',
+			headers,
 			body: Buffer.alloc(10 * 1024, 1)
 		});
 		expect(allowed.status).toBe(200);
@@ -152,6 +149,7 @@ describe('emitted server (e2e)', () => {
 
 		const rejected = await rawRequest(`${server.baseUrl}/echo`, {
 			method: 'POST',
+			headers,
 			body: Buffer.alloc(600 * 1024, 1)
 		});
 		expect(rejected.status).toBe(413);

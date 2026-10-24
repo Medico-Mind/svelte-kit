@@ -5,14 +5,15 @@
  */
 
 declare module 'SERVER' {
-	export { Server } from '@sveltejs/kit';
+	import type { Server } from '@sveltejs/kit';
+	export const server: Server;
 }
 
 declare module 'MANIFEST' {
-	import type { SSRManifest } from '@sveltejs/kit';
-	export const manifest: SSRManifest;
 	export const prerendered: Set<string>;
 	export const base: string;
+	/** Application path including the base path, e.g. `base/_app` (no leading slash). */
+	export const appPath: string;
 }
 
 declare module 'ENV' {
@@ -25,10 +26,6 @@ declare module 'HANDLER' {
 	import type { Hono } from 'hono';
 	export const app: Hono;
 	export const handler: (request: Request) => Promise<Response>;
-}
-
-declare module 'SHIMS' {
-	// side-effect only
 }
 
 /** Replaced with the JSON-encoded `envPrefix` adapter option at adapt time. */

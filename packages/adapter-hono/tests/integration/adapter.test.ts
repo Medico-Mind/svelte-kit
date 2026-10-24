@@ -19,8 +19,8 @@ const PRERENDERED_HTML = `<html><body>prerendered ${'y'.repeat(2000)}</body></ht
 const IMMUTABLE_JS = `export const chunk = ${JSON.stringify('z'.repeat(2000))};`;
 
 /**
- * Stands in for SvelteKit's generated server module: same surface
- * (`Server#init`, `Server#respond`) with introspectable behavior.
+ * Stands in for SvelteKit's server output: same surface (`Server#init`,
+ * `Server#respond`) with introspectable behavior.
  */
 const STUB_SERVER = `
 export class Server {
@@ -48,8 +48,9 @@ export class Server {
 }
 `;
 
-function fakeBuilder(overrides: { basePath?: string } = {}): Builder {
+function fakeBuilder(overrides: { basePath?: string; appPath?: string } = {}): Builder {
 	const base = overrides.basePath ?? '';
+	const appPath = overrides.appPath ?? '_app';
 	const log = Object.assign((message: string) => void message, {
 		info: () => {},
 		minor: () => {},
@@ -62,9 +63,10 @@ function fakeBuilder(overrides: { basePath?: string } = {}): Builder {
 		log,
 		rimraf: (dir: string) => rmSync(dir, { recursive: true, force: true }),
 		mkdirp: (dir: string) => mkdirSync(dir, { recursive: true }),
-		config: { kit: { paths: { base } } },
+		config: { paths: { base } },
 		prerendered: { paths: ['/prerendered'] },
 		getBuildDirectory: (name: string) => path.join(scratch, 'kit', name),
+		getAppPath: () => appPath,
 		writeClient(dest: string) {
 			mkdirSync(path.join(dest, '_app/immutable'), { recursive: true });
 			writeFileSync(path.join(dest, '_app/immutable/chunk.js'), IMMUTABLE_JS);
@@ -82,8 +84,13 @@ function fakeBuilder(overrides: { basePath?: string } = {}): Builder {
 			writeFileSync(path.join(dest, 'index.js'), STUB_SERVER);
 			return [];
 		},
-		generateManifest: () =>
-			`{ appDir: "_app", appPath: "_app", assets: new Set([]), mimeTypes: {}, _: {} }`
+		generateServerInstance(dest: string, opts: { serverDirectory: string }) {
+			const relative = path.relative(path.dirname(dest), opts.serverDirectory) || '.';
+			writeFileSync(
+				dest,
+				`import { Server } from '${relative}/index.js';\nexport const server = new Server({});\n`
+			);
+		}
 	} as unknown as Builder;
 }
 
@@ -99,7 +106,7 @@ describe('adapter.adapt()', () => {
 	});
 
 	it('emits the documented output layout', () => {
-		for (const file of ['index.js', 'handler.js', 'app.js', 'env.js', 'shims.js']) {
+		for (const file of ['index.js', 'handler.js', 'app.js', 'env.js']) {
 			expect(existsSync(path.join(out, file)), file).toBe(true);
 		}
 		expect(existsSync(path.join(out, 'client/large.txt'))).toBe(true);
@@ -111,7 +118,7 @@ describe('adapter.adapt()', () => {
 			.map((file) => readFileSync(path.join(out, file), 'utf8'))
 			.join('\n');
 		const importStatements =
-			/^\s*(?:import|export)[^\n]*from\s*['"](hono|@hono\/node-server|SERVER|MANIFEST|HANDLER|SHIMS|ENV)['"]/m;
+			/^\s*(?:import|export)[^\n]*from\s*['"](hono|@hono\/node-server|SERVER|MANIFEST|HANDLER|ASSETS|ENV)['"]/m;
 		expect(content).not.toMatch(importStatements);
 	});
 
@@ -272,9 +279,7 @@ describe('adapter.adapt()', () => {
 
 	it('serves generated assets with a SvelteKit base path', async () => {
 		const baseOut = path.join(scratch, 'build-base');
-		const builder = fakeBuilder({ basePath: '/base' });
-		builder.generateManifest = () =>
-			`{ appDir: "_app", appPath: "base/_app", assets: new Set([]), mimeTypes: {}, _: {} }`;
+		const builder = fakeBuilder({ basePath: '/base', appPath: 'base/_app' });
 		builder.prerendered.paths = ['/base/prerendered'];
 		await adapter({ out: baseOut }).adapt(builder);
 		const server = await spawnServer(path.join(baseOut, 'index.js'));

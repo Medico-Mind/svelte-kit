@@ -141,7 +141,7 @@ export interface AdapterOptions {
 	runtimeConfig?: RuntimeConfig;
 }
 
-const TEMPLATE_FILES = ['index.js', 'handler.js', 'app.js', 'env.js', 'shims.js'] as const;
+const TEMPLATE_FILES = ['index.js', 'handler.js', 'app.js', 'env.js'] as const;
 
 function templateDirectory(): string {
 	const here = path.dirname(fileURLToPath(import.meta.url));
@@ -277,19 +277,23 @@ function copyServerAssets(from: string, to: string): void {
  *
  * @example
  * ```js
- * // svelte.config.js
+ * // vite.config.js
  * import adapter from '@medicomind/svelte-adapter-hono';
+ * import { sveltekit } from '@sveltejs/kit/vite';
+ * import { defineConfig } from 'vite';
  *
- * export default {
- *   kit: {
- *     adapter: adapter({
- *       out: 'build',
- *       precompress: true,
- *       envPrefix: '',
- *       runtimeConfig: { bodySizeLimit: '1M' }
+ * export default defineConfig({
+ *   plugins: [
+ *     sveltekit({
+ *       adapter: adapter({
+ *         out: 'build',
+ *         precompress: true,
+ *         envPrefix: '',
+ *         runtimeConfig: { bodySizeLimit: '1M' }
+ *       })
  *     })
- *   }
- * };
+ *   ]
+ * });
  * ```
  */
 export default function adapter(options: AdapterOptions = {}): Adapter {
@@ -306,9 +310,11 @@ export default function adapter(options: AdapterOptions = {}): Adapter {
 			builder.rimraf(tmp);
 			builder.mkdirp(tmp);
 
+			const base = builder.config.paths.base;
+
 			builder.log.minor('Copying assets');
-			builder.writeClient(`${out}/client${builder.config.kit.paths.base}`);
-			builder.writePrerendered(`${out}/prerendered${builder.config.kit.paths.base}`);
+			builder.writeClient(`${out}/client${base}`);
+			builder.writePrerendered(`${out}/prerendered${base}`);
 
 			const resolvedPrecompress = resolvePrecompressOptions(precompress);
 			if (resolvedPrecompress) {
@@ -323,19 +329,22 @@ export default function adapter(options: AdapterOptions = {}): Adapter {
 
 			builder.log.minor('Building server');
 			builder.writeServer(`${tmp}/server`);
+			// exports a ready-to-init `server` instance built from the SSR manifest
+			builder.generateServerInstance(`${tmp}/server/server.js`, {
+				serverDirectory: `${tmp}/server`
+			});
 
 			writeFileSync(
 				`${tmp}/manifest.js`,
-				`export const manifest = ${builder.generateManifest({ relativePath: './server' })};\n\n` +
-					`export const prerendered = new Set(${JSON.stringify(builder.prerendered.paths)});\n\n` +
-					`export const base = ${JSON.stringify(builder.config.kit.paths.base)};\n`
+				`export const prerendered = new Set(${JSON.stringify(builder.prerendered.paths)});\n\n` +
+					`export const base = ${JSON.stringify(base)};\n\n` +
+					`export const appPath = ${JSON.stringify(builder.getAppPath())};\n`
 			);
 
 			const templates = templateDirectory();
 			const specifiers = {
-				SHIMS: './shims.js',
 				ASSETS: './asset-manifest.js',
-				SERVER: './server/index.js',
+				SERVER: './server/server.js',
 				MANIFEST: './server/manifest.js',
 				ENV: './env.js',
 				HANDLER: './handler.js'
@@ -361,7 +370,7 @@ export default function adapter(options: AdapterOptions = {}): Adapter {
 			builder.log.minor('Bundling SvelteKit server');
 			const serverBundle = await rolldown({
 				input: {
-					index: `${tmp}/server/index.js`,
+					server: `${tmp}/server/server.js`,
 					manifest: `${tmp}/manifest.js`
 				},
 				external: isBuiltin,
@@ -385,7 +394,7 @@ export default function adapter(options: AdapterOptions = {}): Adapter {
 			builder.log.minor('Bundling server entry');
 			const tmpDir = path.resolve(tmp);
 			const crossModuleImport =
-				/^\.\/(handler|app|env|shims|asset-manifest)\.js$|^\.\/server\/(index|manifest)\.js$/;
+				/^\.\/(handler|app|env|asset-manifest)\.js$|^\.\/server\/(server|manifest)\.js$/;
 			for (const name of TEMPLATE_FILES) {
 				const templateBundle = await rolldown({
 					input: path.join(tmp, name),

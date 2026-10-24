@@ -20,25 +20,30 @@
 npm install --save-dev @medicomind/svelte-adapter-hono hono @hono/node-server
 ```
 
-`@sveltejs/kit`, `hono` and `@hono/node-server` are peer dependencies — the emitted build bundles the Hono version installed in **your** project.
+`@sveltejs/kit` (3.x), `hono` (4.13+) and `@hono/node-server` (2.1+) are peer dependencies — the emitted build bundles the Hono version installed in **your** project. Requires Node ≥ 22.17 (same as SvelteKit 3).
 
 ## Usage
 
-```js
-// svelte.config.js
-import adapter from '@medicomind/svelte-adapter-hono';
+SvelteKit 3 is configured through the `sveltekit()` Vite plugin:
 
-/** @type {import('@sveltejs/kit').Config} */
-export default {
-	kit: {
-		adapter: adapter({
-			out: 'build',
-			precompress: true,
-			envPrefix: '',
-			runtimeConfig: { bodySizeLimit: '1M' }
+```js
+// vite.config.js
+import adapter from '@medicomind/svelte-adapter-hono';
+import { sveltekit } from '@sveltejs/kit/vite';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+	plugins: [
+		sveltekit({
+			adapter: adapter({
+				out: 'build',
+				precompress: true,
+				envPrefix: '',
+				runtimeConfig: { bodySizeLimit: '1M' }
+			})
 		})
-	}
-};
+	]
+});
 ```
 
 Build and run:
@@ -127,7 +132,7 @@ interface RuntimeConfig {
 }
 ```
 
-Values are validated when `svelte.config.js` is loaded — an unknown field or a value of the wrong shape (e.g. `port: 1.5`, `bodySizeLimit: '10KB'`) fails the build immediately. `envPrefix` does not apply to `runtimeConfig` (it only prefixes environment variables).
+Values are validated when `vite.config.js` is loaded — an unknown field or a value of the wrong shape (e.g. `port: 1.5`, `bodySizeLimit: '10KB'`) fails the build immediately. `envPrefix` does not apply to `runtimeConfig` (it only prefixes environment variables).
 
 ### Serving negotiation
 
@@ -141,7 +146,7 @@ Each identity and precompressed file has its own strong SHA-256 ETag, calculated
 
 Single byte ranges use identity content, including suffix and open-ended ranges. `If-Range` requires the current strong identity ETag; unsupported dates or stale/weak tags produce a full response. Malformed/multiple ranges retain the existing full-response behavior. Immutable cache-control and prerendered trailing-slash redirects are unchanged.
 
-Deploy the complete output directory, including `asset-manifest.js`, and rebuild after adding or changing static files or sidecars. Post-build file additions are not discovered; changing bytes without regenerating metadata would invalidate sizes and validators. Existing adapter options, defaults, runtime environment variables and embedding exports are unchanged. The adapter remains on the SvelteKit 2 API (`@sveltejs/kit: ^2.22.0`).
+Deploy the complete output directory, including `asset-manifest.js`, and rebuild after adding or changing static files or sidecars. Post-build file additions are not discovered; changing bytes without regenerating metadata would invalidate sizes and validators. Existing adapter options, defaults, runtime environment variables and embedding exports are unchanged.
 
 ### Compress on demand
 
@@ -204,7 +209,7 @@ import { handler } from './build/handler.js';
 const response = await handler(new Request('http://localhost/'));
 ```
 
-`env.js` (prefixed env reader) and `shims.js` (SvelteKit's Node polyfills, side-effect import) are also emitted. When embedding, the client IP falls back to the `@hono/node-server` socket when available; behind another runtime configure `ADDRESS_HEADER`.
+`env.js` (prefixed env reader) is also emitted. When embedding, the client IP falls back to the `@hono/node-server` socket when available; behind another runtime configure `ADDRESS_HEADER`.
 
 ## Comparison with `@sveltejs/adapter-node`
 
@@ -246,10 +251,9 @@ build/
 ├── asset-manifest.js # generated client/prerendered metadata and content hashes
 ├── app.js          # re-exports { app, handler } for embedding
 ├── env.js          # prefixed env reader
-├── shims.js        # SvelteKit Node polyfills
 ├── client/         # static assets (+ .gz/.br/.zst sidecars)
 ├── prerendered/    # prerendered pages (+ sidecars)
-└── server/         # bundled SvelteKit server + manifest
+└── server/         # bundled SvelteKit server instance + manifest
 ```
 
 ## Performance validation

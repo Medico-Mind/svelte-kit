@@ -4,12 +4,12 @@ import { defineConfig } from 'tsup';
  * Two build passes:
  *
  * 1. The adapter itself (`dist/index.js`) — the build-time API consumed from
- *    `svelte.config.js`. Its bundler dependency stays external.
+ *    `vite.config.js`. Its bundler dependency stays external.
  *
  * 2. The runtime templates (`dist/files/*.js`) — copied into the user's build
  *    output by `adapt()`. Each template is bundled flat (shared `src/runtime`
  *    modules are inlined) so the template files are freestanding, except for:
- *    - placeholder specifiers (`SERVER`, `MANIFEST`, `ENV`, `HANDLER`, `SHIMS`)
+ *    - placeholder specifiers (`SERVER`, `MANIFEST`, `ENV`, `HANDLER`, `ASSETS`)
  *      which `adapt()` rewrites to relative paths in the emitted build, and
  *    - `hono` / `@hono/node-server` / `@sveltejs/kit`, which are resolved from
  *      the user's node_modules and bundled by the adapt-time rolldown pass.
@@ -30,8 +30,7 @@ export default defineConfig([
 			'files/index': 'src/files/index.ts',
 			'files/handler': 'src/files/handler.ts',
 			'files/app': 'src/files/app.ts',
-			'files/env': 'src/files/env.ts',
-			'files/shims': 'src/files/shims.ts'
+			'files/env': 'src/files/env.ts'
 		},
 		format: ['esm'],
 		platform: 'node',
@@ -45,7 +44,6 @@ export default defineConfig([
 			'HANDLER',
 			'MANIFEST',
 			'SERVER',
-			'SHIMS',
 			'hono',
 			/^hono\//,
 			'@hono/node-server',
